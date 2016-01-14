@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.3"
+#define VERSION "2.5.5"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -15,7 +15,7 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
-//#define FUNCTION_BLOCK_MAPS
+#define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
 
 #define SELECT_MAPS 5
@@ -25,9 +25,15 @@
 #define NOMINATED_MAPS_IN_MENU 3
 #define NOMINATED_MAPS_PER_PLAYER 3
 
+#define BLOCK_MAP_COUNT 10
+
 new const PREFIX[] = "^4[MapManager]";
 
 ///**************************///
+
+#if BLOCK_MAP_COUNT <= 0
+	#undef FUNCTION_BLOCK_MAPS
+#endif
 
 enum (+=100)
 {
@@ -40,8 +46,9 @@ enum (+=100)
 enum _:MAP_INFO
 {
 	m_MapName[32],
-	m_Min,
-	m_Max
+	m_MinPlayers,
+	m_MaxPlayers,
+	m_BlockCount
 };
 enum _:VOTEMENU_INFO
 {
@@ -54,6 +61,11 @@ enum _:NOMINATEDMAP_INFO
 	n_MapName[32],
 	n_Player,
 	n_MapIndex
+};
+enum _:BLOCKEDMAP_INFO
+{
+	b_MapName[32],
+	b_Count
 };
 
 new Array: g_aMaps;
@@ -83,7 +95,11 @@ enum _:CVARS
 	NEXTMAP
 };
 
-new const MAPS_FILE[] = "maps.ini";
+new const MAPS_FILE[] = "maps.ini";//configdir
+
+#if defined FUNCTION_BLOCK_MAPS
+new const FILE_BLOCKEDMAPS[] = "blockedmaps.ini";//datadir
+#endif
 
 new g_pCvars[CVARS];
 new g_iTeamScore[2];
@@ -120,7 +136,11 @@ new g_iNominatedMaps[33];
 new g_iPage[33];
 new g_szMapPrefixes[][] = {"deathrun_", "de_"};
 #endif
- 
+
+#if defined FUNCTION_BLOCK_MAPS
+new g_iBlockedSize;
+#endif
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
@@ -199,7 +219,7 @@ public Commang_Debug(id)
 	for(new i; i < iSize; i++)
 	{
 		ArrayGetArray(g_aMaps, i, eMapInfo);
-		console_print(id, "%3d %32s ^t%d^t%d", i, eMapInfo[m_MapName], eMapInfo[m_Min], eMapInfo[m_Max]);
+		console_print(id, "%3d %32s ^t%d^t%d^t%d", i, eMapInfo[m_MapName], eMapInfo[m_MinPlayers], eMapInfo[m_MaxPlayers], eMapInfo[m_BlockCount]);
 	}
 	return PLUGIN_HANDLED;
 }
@@ -327,6 +347,15 @@ public Command_Say(id)
 }
 NominateMap(id, map[32], map_index)
 {
+	#if defined FUNCTION_BLOCK_MAPS
+	new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
+	if(eMapInfo[m_BlockCount])
+	{
+		client_print_color(id, print_team_default, "%s^1 Эта карта недоступна для номинации.", PREFIX);
+		return PLUGIN_CONTINUE;
+	}
+	#endif
+	
 	new eNomInfo[NOMINATEDMAP_INFO];
 	new szName[32];	get_user_name(id, szName, charsmax(szName));
 	
@@ -391,7 +420,11 @@ public Show_MapsListMenu(id, iPage)
 	
 		iNominated = is_map_nominated(i);
 		
-		if(iNominated)
+		if(eMapInfo[m_BlockCount])
+		{
+			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\d %s[\r%d\d]", ++Item, eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
+		}
+		else if(iNominated)
 		{
 			new eNomInfo[NOMINATEDMAP_INFO]; ArrayGetArray(g_aNominatedMaps, iNominated - 1, eNomInfo);
 			if(id == eNomInfo[n_Player])
@@ -502,10 +535,73 @@ public plugin_cfg()
 }
 LoadMapsFromFile()
 {
-	new szDir[128]; get_localinfo("amxx_configsdir", szDir, charsmax(szDir));
-	new szFile[128]; formatex(szFile, charsmax(szFile), "%s/%s", szDir, MAPS_FILE);
-		
+	new szDir[128], szFile[128];	
 	get_mapname(g_szCurrentMap, charsmax(g_szCurrentMap));
+	
+	#if defined FUNCTION_BLOCK_MAPS
+	get_localinfo("amxx_datadir", szDir, charsmax(szDir));
+	formatex(szFile, charsmax(szFile), "%s/%s", szDir, FILE_BLOCKEDMAPS);
+	
+	new Array:aBlockedMaps = ArrayCreate(BLOCKEDMAP_INFO);
+	new eBlockedInfo[BLOCKEDMAP_INFO];
+	
+	if(file_exists(szFile))
+	{
+		new szTemp[128]; formatex(szTemp, charsmax(szTemp), "%s/temp.ini", szDir);
+		new iFile = fopen(szFile, "rt");
+		new iTemp = fopen(szTemp, "wt");
+		
+		new szBuffer[42], szMapName[32], szCount[8], iCount, i = 0;
+		
+		while(!feof(iFile))
+		{
+			fgets(iFile, szBuffer, charsmax(szBuffer));
+			parse(szBuffer, szMapName, charsmax(szMapName), szCount, charsmax(szCount));
+			
+			if(!is_map_valid(szMapName) || is_map_blocked(aBlockedMaps, szMapName) || equali(szMapName, g_szCurrentMap)) continue;
+			
+			iCount = str_to_num(szCount) - 1;
+			
+			if(iCount <= 0) continue;
+			
+			if(iCount > BLOCK_MAP_COUNT)
+			{
+				fprintf(iTemp, "^"%s^" ^"%d^"^n", szMapName, BLOCK_MAP_COUNT);
+				iCount = BLOCK_MAP_COUNT;
+			}
+			else
+			{
+				fprintf(iTemp, "^"%s^" ^"%d^"^n", szMapName, iCount);
+			}
+			
+			formatex(eBlockedInfo[b_MapName], charsmax(eBlockedInfo[b_MapName]), szMapName);
+			eBlockedInfo[b_Count] = iCount;
+			ArrayPushArray(aBlockedMaps, eBlockedInfo);	
+			
+			if(++i >= BLOCK_MAP_COUNT) break;
+		}
+		
+		fprintf(iTemp, "^"%s^" ^"%d^"^n", g_szCurrentMap, BLOCK_MAP_COUNT);
+		
+		fclose(iFile);
+		fclose(iTemp);
+		
+		delete_file(szFile);
+		rename_file(szTemp, szFile, 1);
+	}
+	else
+	{
+		new iFile = fopen(szFile, "wt");
+		if(iFile)
+		{
+			fprintf(iFile, "^"%s^" ^"%d^"^n", g_szCurrentMap, BLOCK_MAP_COUNT);
+		}
+		fclose(iFile);
+	}
+	#endif
+	
+	get_localinfo("amxx_configsdir", szDir, charsmax(szDir));
+	formatex(szFile, charsmax(szFile), "%s/%s", szDir, MAPS_FILE);
 	
 	if(file_exists(szFile))
 	{
@@ -523,15 +619,25 @@ LoadMapsFromFile()
 				if(!szMap[0] || szMap[0] == ';' || !ValidMap(szMap) || is_map_in_array(szMap) || equali(szMap, g_szCurrentMap)) continue;
 				
 				#if defined FUNCTION_BLOCK_MAPS
-				if(is_map_blocked(szMap)) continue;
+				new blocked_index = is_map_blocked(aBlockedMaps, szMap);
+				if(blocked_index)
+				{
+					ArrayGetArray(aBlockedMaps, blocked_index - 1, eBlockedInfo);
+					eMapInfo[m_BlockCount] = eBlockedInfo[b_Count];
+				}
+				else
+				{
+					eMapInfo[m_BlockCount] = 0;
+				}
 				#endif
 				
 				eMapInfo[m_MapName] = szMap;
-				eMapInfo[m_Min] = str_to_num(szMin);
-				eMapInfo[m_Max] = str_to_num(szMax) == 0 ? 32 : str_to_num(szMax);
+				eMapInfo[m_MinPlayers] = str_to_num(szMin);
+				eMapInfo[m_MaxPlayers] = str_to_num(szMax) == 0 ? 32 : str_to_num(szMax);
 				
 				ArrayPushArray(g_aMaps, eMapInfo);
 				szMin = ""; szMax = "";
+				
 			}
 			fclose(f);
 			
@@ -541,6 +647,20 @@ LoadMapsFromFile()
 			{
 				set_fail_state("Nothing loaded from file.");
 			}
+			
+			#if defined FUNCTION_BLOCK_MAPS
+			g_iBlockedSize = ArraySize(aBlockedMaps);
+			if(iSize - g_iBlockedSize < SELECT_MAPS)
+			{
+				log_amx("LoadMaps: warning to little maps without block [%d]", iSize - g_iBlockedSize);
+			}
+			if(iSize - g_iBlockedSize < 1)
+			{
+				log_amx("LoadMaps: blocked maps cleared");
+				ClearBlockedMaps();
+			}
+			ArrayDestroy(aBlockedMaps);
+			#endif
 			
 			#if defined FUNCTION_NEXTMAP
 			new iRandomMap = random_num(0, iSize - 1);
@@ -649,7 +769,7 @@ public StartVote(id)
 	for(new i = 0; i < iGlobalSize; i++)
 	{
 		ArrayGetArray(g_aMaps, i, eMapInfo);
-		if(eMapInfo[m_Min] <= iPlayersNum <= eMapInfo[m_Max])
+		if(eMapInfo[m_MinPlayers] <= iPlayersNum <= eMapInfo[m_MaxPlayers] && !eMapInfo[m_BlockCount])
 		{
 			formatex(eMenuInfo[v_MapName], charsmax(eMenuInfo[v_MapName]), eMapInfo[m_MapName]);
 			eMenuInfo[v_MapIndex] = i; iCurrentSize++;
@@ -658,11 +778,16 @@ public StartVote(id)
 	}
 	new Item = 0;
 	
+	#if defined FUNCTION_BLOCK_MAPS
+	new iMaxItems = min(SELECT_MAPS, iGlobalSize - g_iBlockedSize);
+	#else
+	new iMaxItems = min(SELECT_MAPS, iGlobalSize);
+	#endif
+	
 	#if defined FUNCTION_NOMINATION
 	new eNomInfo[NOMINATEDMAP_INFO];
-	new iNomSize = ArraySize(g_aNominatedMaps);
-	
-	g_iMenuItemsCount = min(min(iNomSize, NOMINATED_MAPS_IN_MENU), SELECT_MAPS);
+	new iNomSize = ArraySize(g_aNominatedMaps);	
+	g_iMenuItemsCount = min(min(iNomSize, NOMINATED_MAPS_IN_MENU), iMaxItems);
 	
 	for(new iRandomMap; Item < g_iMenuItemsCount; Item++)
 	{
@@ -682,9 +807,9 @@ public StartVote(id)
 	}	
 	#endif
 	
-	if(iCurrentSize && Item < SELECT_MAPS)
+	if(iCurrentSize && Item < iMaxItems)
 	{
-		g_iMenuItemsCount = min(iCurrentSize, SELECT_MAPS);
+		g_iMenuItemsCount = max(min(iCurrentSize, iMaxItems), Item);
 		for(new iRandomMap; Item < g_iMenuItemsCount; Item++)
 		{
 			iRandomMap = random_num(0, ArraySize(aMaps) - 1);
@@ -697,15 +822,17 @@ public StartVote(id)
 		}
 	}
 	
-	if(Item < SELECT_MAPS)
+	if(Item < iMaxItems)
 	{
-		g_iMenuItemsCount = min(iGlobalSize, SELECT_MAPS);
+		g_iMenuItemsCount = min(iGlobalSize, iMaxItems);
 		for(new iRandomMap; Item < g_iMenuItemsCount; Item++)
 		{
-			do	iRandomMap = random_num(0, iGlobalSize - 1);
-			while(is_map_in_menu(iRandomMap));	
-			
-			ArrayGetArray(g_aMaps, iRandomMap, eMapInfo);
+			do
+			{
+				iRandomMap = random_num(0, iGlobalSize - 1);
+				ArrayGetArray(g_aMaps, iRandomMap, eMapInfo);
+			}
+			while(is_map_in_menu(iRandomMap) || eMapInfo[m_BlockCount]);
 			
 			formatex(g_eMenuItems[Item][v_MapName], charsmax(g_eMenuItems[][v_MapName]), eMapInfo[v_MapName]);
 			g_eMenuItems[Item][v_MapIndex] = iRandomMap;
@@ -1024,10 +1151,35 @@ stock is_map_in_array(map[])
 	}
 	return 0;
 }
-stock is_map_blocked(map[])
+#if defined FUNCTION_BLOCK_MAPS
+is_map_blocked(Array:array, map[])
 {
-	return false;
+	new eBlockedInfo[BLOCKEDMAP_INFO], iSize = ArraySize(array);
+	for(new i; i < iSize; i++)
+	{
+		ArrayGetArray(array, i, eBlockedInfo);
+		if(equali(map, eBlockedInfo[b_MapName]))
+		{
+			return i + 1;
+		}
+	}
+	return 0;
 }
+ClearBlockedMaps()
+{
+	new eMapInfo[MAP_INFO], iSize = ArraySize(g_aMaps);
+	for(new i; i < iSize; i++)
+	{
+		ArrayGetArray(g_aMaps, i, eMapInfo);
+		if(eMapInfo[m_BlockCount])
+		{
+			eMapInfo[m_BlockCount] = 0;
+			ArraySetArray(g_aMaps, i, eMapInfo);
+		}
+	}
+	g_iBlockedSize = 0;
+}
+#endif
 stock is_map_in_menu(index)
 {
 	for(new i; i < sizeof(g_eMenuItems); i++)
