@@ -1,0 +1,2 @@
+# MapManager
+AMXX Plugin
