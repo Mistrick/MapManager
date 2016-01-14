@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.5"
+#define VERSION "2.5.7"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -243,6 +243,11 @@ public Command_StopVote(id, flag)
 		arrayset(g_bRockVoted, false, 33);
 		#endif
 		
+		if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
+		{
+			SetBlackScreenFade(0);
+		}
+		
 		remove_task(TASK_VOTEMENU);
 		remove_task(TASK_SHOWTIMER);
 		remove_task(TASK_TIMER);
@@ -304,8 +309,16 @@ public Command_RockTheVote(id)
 		else
 		{
 			g_bRockVote = true;
-			StartVote(0);
-			client_print_color(0, print_team_default, "%s^1 Начинаем досрочное голосование.", PREFIX);
+			if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
+			{
+				StartVote(0);
+				client_print_color(0, print_team_default, "%s^1 Начинаем досрочное голосование.", PREFIX);
+			}
+			else
+			{
+				g_bStartVote = true;
+				client_print_color(0, print_team_default, "%s^1 Голосование начнется в следующем раунде.", PREFIX);
+			}
 		}
 	}
 	else
