@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.0"
+#define VERSION "2.5.3"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -64,6 +64,9 @@ enum _:CVARS
 	START_VOTE_BEFORE_END,
 	SHOW_RESULT_TYPE,
 	SHOW_SELECTS,
+	START_VOTE_IN_NEW_ROUND,
+	FREEZE_IN_VOTE,
+	BLACK_SCREEN_IN_VOTE,
 	EXENDED_MAX,
 	EXENDED_TIME,
 #if defined FUNCTION_RTV
@@ -75,6 +78,7 @@ enum _:CVARS
 	MAXROUNDS,
 	WINLIMIT,
 	TIMELIMIT,
+	FREEZETIME,
 	CHATTIME,
 	NEXTMAP
 };
@@ -93,6 +97,8 @@ new g_iTotalVotes;
 new g_iTimer;
 new g_bPlayerVoted[33];
 new g_iExtendedMax;
+new g_bStartVote;
+new Float:g_fOldFreezeTime;
 
 #if defined FUNCTION_SOUND
 new const g_szSound[][] =
@@ -125,6 +131,9 @@ public plugin_init()
 	g_pCvars[START_VOTE_BEFORE_END] = register_cvar("mm_start_vote_before_end", "2");//minutes
 	g_pCvars[SHOW_RESULT_TYPE] = register_cvar("mm_show_result_type", "1");//0 - disable, 1 - menu, 2 - hud
 	g_pCvars[SHOW_SELECTS] = register_cvar("mm_show_selects", "1");//0 - disable, 1 - all
+	g_pCvars[START_VOTE_IN_NEW_ROUND] = register_cvar("mm_start_vote_in_new_round", "0");//0 - disable, 1 - enable
+	g_pCvars[FREEZE_IN_VOTE] = register_cvar("mm_freeze_in_vote", "0");//0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
+	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mm_black_screen_in_vote", "0");//0 - disable, 1 - enable
 	
 	g_pCvars[EXENDED_MAX] = register_cvar("mm_extended_map_max", "3");
 	g_pCvars[EXENDED_TIME] = register_cvar("mm_extended_time", "15");//minutes
@@ -139,6 +148,7 @@ public plugin_init()
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
 	g_pCvars[WINLIMIT] = get_cvar_pointer("mp_winlimit");
 	g_pCvars[TIMELIMIT] = get_cvar_pointer("mp_timelimit");
+	g_pCvars[FREEZETIME] = get_cvar_pointer("mp_freezetime");
 	
 	g_pCvars[NEXTMAP] = register_cvar("amx_nextmap", "", FCVAR_SERVER|FCVAR_EXTDLL|FCVAR_SPONLY);
 	
@@ -310,7 +320,7 @@ public Command_Say(id)
 			map_index = is_map_in_array(szFormat);
 			if(map_index)
 			{
-				NominateMap(id, szFormat, map_index - 1);
+				NominateMap(id, szFormat, map_index - 1); break;
 			}
 		}
 	}
@@ -574,6 +584,18 @@ public Event_NewRound()
 		StartVote(0);
 	}
 	
+	if(g_bStartVote)
+	{
+		log_amx("StartVote: timeleft %d, new round", get_timeleft());
+		StartVote(0);
+	}
+	
+	if(g_bVoteStarted && get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]) && get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
+	{
+		g_fOldFreezeTime = get_pcvar_float(g_pCvars[FREEZETIME]);
+		set_pcvar_float(g_pCvars[FREEZETIME], float(PRE_START_TIME + VOTE_TIME + 1));
+	}
+	
 	#if defined FUNCTION_RTV
 	if(g_bVoteFinished && (g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1))
 	#else
@@ -593,13 +615,20 @@ public Event_TeamScore()
 }
 public Task_CheckTime()
 {
-	if(g_bVoteFinished) return PLUGIN_CONTINUE;
+	if(g_bVoteStarted || g_bVoteFinished) return PLUGIN_CONTINUE;
 	
 	new iTimeLeft = get_timeleft();
 	if(iTimeLeft <= get_pcvar_num(g_pCvars[START_VOTE_BEFORE_END]) * 60)
 	{
-		log_amx("StartVote: timeleft %d", iTimeLeft);
-		StartVote(0);
+		if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
+		{
+			log_amx("StartVote: timeleft %d", iTimeLeft);
+			StartVote(0);
+		}
+		else
+		{
+			g_bStartVote = true;
+		}
 	}	
 	
 	return PLUGIN_CONTINUE;
@@ -609,6 +638,7 @@ public StartVote(id)
 	if(g_bVoteStarted) return 0;
 	
 	g_bVoteStarted = true;
+	g_bStartVote = false;
 	
 	ResetInfo();
 	
@@ -701,6 +731,11 @@ ResetInfo()
 }
 ForwardPreStartVote()
 {
+	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
+	{
+		SetBlackScreenFade(1);
+	}
+	
 	#if PRE_START_TIME > 0
 	g_iTimer = PRE_START_TIME;
 	ShowTimer();
@@ -886,7 +921,16 @@ FinishVote()
 {
 	g_bVoteStarted = false;
 	g_bVoteFinished = true;
-		
+	
+	if(get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]))
+	{
+		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
+	}
+	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
+	{
+		SetBlackScreenFade(0);
+	}
+	
 	new iMaxVote = 0, iRandom;
 	for(new i = 1; i < g_iMenuItemsCount + 1; i++)
 	{
@@ -1071,4 +1115,36 @@ stock Intermission()
 {
 	emessage_begin(MSG_ALL, SVC_INTERMISSION);
 	emessage_end();
+}
+stock SetBlackScreenFade(fade)
+{
+	new time, hold, flags;
+	static iMsgScreenFade; 
+	if(!iMsgScreenFade) iMsgScreenFade = get_user_msgid("ScreenFade");
+	
+	switch (fade)
+	{
+		case 1:
+		{
+			time = 1;
+			hold = 1;
+			flags = 4;
+		}	
+		default:
+		{
+			time = 4096;
+			hold = 1024;
+			flags = 2;
+		}
+	}
+
+	message_begin(MSG_BROADCAST, iMsgScreenFade);
+	write_short(time);
+	write_short(hold);
+	write_short(flags);
+	write_byte(0);
+	write_byte(0);
+	write_byte(0);
+	write_byte(255);
+	message_end();
 }
