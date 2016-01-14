@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.7"
+#define VERSION "2.5.8"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -31,7 +31,7 @@ new const PREFIX[] = "^4[MapManager]";
 
 ///**************************///
 
-#if BLOCK_MAP_COUNT <= 0
+#if BLOCK_MAP_COUNT <= 1
 	#undef FUNCTION_BLOCK_MAPS
 #endif
 
@@ -79,6 +79,7 @@ enum _:CVARS
 	START_VOTE_IN_NEW_ROUND,
 	FREEZE_IN_VOTE,
 	BLACK_SCREEN_IN_VOTE,
+	LAST_ROUND,
 	EXENDED_MAX,
 	EXENDED_TIME,
 #if defined FUNCTION_RTV
@@ -86,6 +87,7 @@ enum _:CVARS
 	ROCK_PERCENT,
 	ROCK_PLAYERS,
 	ROCK_CHANGE_TYPE,
+	ROCK_DELAY,
 #endif
 	MAXROUNDS,
 	WINLIMIT,
@@ -115,6 +117,7 @@ new g_bPlayerVoted[33];
 new g_iExtendedMax;
 new g_bStartVote;
 new Float:g_fOldFreezeTime;
+new Float:g_fOldTimeLimit;
 
 #if defined FUNCTION_SOUND
 new const g_szSound[][] =
@@ -154,6 +157,7 @@ public plugin_init()
 	g_pCvars[START_VOTE_IN_NEW_ROUND] = register_cvar("mm_start_vote_in_new_round", "0");//0 - disable, 1 - enable
 	g_pCvars[FREEZE_IN_VOTE] = register_cvar("mm_freeze_in_vote", "0");//0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
 	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mm_black_screen_in_vote", "0");//0 - disable, 1 - enable
+	g_pCvars[LAST_ROUND] = register_cvar("mm_last_round", "0");//0 - disable, 1 - enable
 	
 	g_pCvars[EXENDED_MAX] = register_cvar("mm_extended_map_max", "3");
 	g_pCvars[EXENDED_TIME] = register_cvar("mm_extended_time", "15");//minutes
@@ -163,6 +167,7 @@ public plugin_init()
 	g_pCvars[ROCK_PERCENT] = register_cvar("mm_rtv_percent", "60");
 	g_pCvars[ROCK_PLAYERS] = register_cvar("mm_rtv_players", "5");
 	g_pCvars[ROCK_CHANGE_TYPE] = register_cvar("mm_rtv_change_type", "1");//0 - after vote, 1 - in round end
+	g_pCvars[ROCK_DELAY] = register_cvar("mm_rtv_delay", "0");//minutes
 	#endif
 	
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
@@ -283,6 +288,13 @@ public Command_CurrentMap(id)
 public Command_RockTheVote(id)
 {
 	if(g_bVoteFinished || g_bVoteStarted) return PLUGIN_HANDLED;
+	
+	new iTime = get_pcvar_num(g_pCvars[ROCK_DELAY]) * 60 - (floatround(get_pcvar_float(g_pCvars[TIMELIMIT]) * 60.0) - get_timeleft());
+	if(iTime > 0)
+	{
+		client_print_color(id, print_team_default, "%s^1 Вы не можете голосовать за досрочную смену карты. Осталось:^3 %d:%02d^1.", PREFIX, iTime / 60, iTime % 60);
+		return PLUGIN_HANDLED;
+	}
 	
 	if(!g_bRockVoted[id]) g_iRockVotes++;
 	
@@ -517,6 +529,10 @@ public client_disconnect(id)
 }
 public plugin_end()
 {
+	if(g_fOldTimeLimit > 0.0)
+	{
+		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
+	}
 	if(g_iExtendedMax)
 	{
 		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) - float(g_iExtendedMax * get_pcvar_num(g_pCvars[EXENDED_TIME])));
@@ -730,9 +746,9 @@ public Event_NewRound()
 	}
 	
 	#if defined FUNCTION_RTV
-	if(g_bVoteFinished && (g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1))
+	if(g_bVoteFinished && (g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[LAST_ROUND])))
 	#else
-	if(g_bVoteFinished && get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1)
+	if(g_bVoteFinished && (get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[LAST_ROUND])))
 	#endif
 	{
 		Intermission();
@@ -1095,10 +1111,16 @@ FinishVote()
 		}
 		set_pcvar_string(g_pCvars[NEXTMAP], g_eMenuItems[iMaxVote][v_MapName]);
 		
+		if(get_pcvar_num(g_pCvars[LAST_ROUND]))
+		{
+			g_fOldTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
+			set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
+			client_print_color(0, print_team_default, "%s^1 Это последний раунд.", PREFIX);
+		}
 		#if defined FUNCTION_RTV
-		if(g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 0 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
+		else if(g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 0 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
 		#else
-		if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
+		else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
 		#endif
 		{
 			client_print_color(0, print_team_default, "%s^1 Карта сменится через^3 5^1 секунд.", PREFIX);
@@ -1107,7 +1129,7 @@ FinishVote()
 		#if defined FUNCTION_RTV
 		else if(g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1)
 		#else
-		if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1)
+		else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1)
 		#endif
 		{
 			client_print_color(0, print_team_default, "%s^1 Карта сменится в следующем раунде.", PREFIX);
