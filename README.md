@@ -22,6 +22,9 @@ Cvars:
 - mm_start_vote_before_end :: minutes
 - mm_show_result_type :: 0 - disable, 1 - menu, 2 - hud
 - mm_show_selects :: 0 - disable, 1 - all
+- mm_start_vote_in_new_round :: 0 - disable, 1 - enable
+- mm_freeze_in_vote :: 0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
+- mm_black_screen_in_vote :: 0 - disable, 1 - enable
 - mm_extended_map_max
 - mm_extended_time :: minutes
 - mm_rtv_mode :: 0 - percents, 1 - players
