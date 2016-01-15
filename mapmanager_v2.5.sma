@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.9"
+#define VERSION "2.5.10"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -24,7 +24,7 @@
 #define PRE_START_TIME 5
 #define VOTE_TIME 10
 
-#define NOMINATED_MAPS_IN_MENU 3
+#define NOMINATED_MAPS_IN_VOTE 3
 #define NOMINATED_MAPS_PER_PLAYER 3
 
 #define BLOCK_MAP_COUNT 10
@@ -124,7 +124,7 @@ new Float:g_fOldTimeLimit;
 #if defined FUNCTION_SOUND
 new const g_szSound[][] =
 {
-	"", "sound/fvox/one.wav", "sound/fvox/two.wav", "sound/fvox/three.wav", "sound/fvox/four.wav", "sound/fvox/five.wav",
+	"sound/fvox/one.wav", "sound/fvox/two.wav", "sound/fvox/three.wav", "sound/fvox/four.wav", "sound/fvox/five.wav",
 	"sound/fvox/six.wav", "sound/fvox/seven.wav", "sound/fvox/eight.wav", "sound/fvox/nine.wav", "sound/fvox/ten.wav"
 };
 #endif
@@ -582,7 +582,7 @@ LoadMapsFromFile()
 		new iFile = fopen(szFile, "rt");
 		new iTemp = fopen(szTemp, "wt");
 		
-		new szBuffer[42], szMapName[32], szCount[8], iCount, i = 0;
+		new szBuffer[42], szMapName[32], szCount[8], iCount;
 		
 		while(!feof(iFile))
 		{
@@ -607,9 +607,7 @@ LoadMapsFromFile()
 			
 			formatex(eBlockedInfo[b_MapName], charsmax(eBlockedInfo[b_MapName]), szMapName);
 			eBlockedInfo[b_Count] = iCount;
-			ArrayPushArray(aBlockedMaps, eBlockedInfo);	
-			
-			if(++i >= BLOCK_MAP_COUNT) break;
+			ArrayPushArray(aBlockedMaps, eBlockedInfo);
 		}
 		
 		fprintf(iTemp, "^"%s^" ^"%d^"^n", g_szCurrentMap, BLOCK_MAP_COUNT);
@@ -818,7 +816,7 @@ public StartVote(id)
 	#if defined FUNCTION_NOMINATION
 	new eNomInfo[NOMINATEDMAP_INFO];
 	new iNomSize = ArraySize(g_aNominatedMaps);	
-	g_iMenuItemsCount = min(min(iNomSize, NOMINATED_MAPS_IN_MENU), iMaxItems);
+	g_iMenuItemsCount = min(min(iNomSize, NOMINATED_MAPS_IN_VOTE), iMaxItems);
 	
 	for(new iRandomMap; Item < g_iMenuItemsCount; Item++)
 	{
@@ -930,7 +928,7 @@ public ShowTimer()
 		for(new id, i; i < pNum; i++)
 		{
 			id = iPlayers[i];
-			SendAudio(id, g_szSound[g_iTimer], PITCH_NORM);
+			SendAudio(id, g_szSound[g_iTimer - 1], PITCH_NORM);
 		}
 	}
 	#endif
@@ -1152,12 +1150,8 @@ FinishVote()
 ///**************************///
 stock GetPlayersNum()
 {
-	new count = 0;
-	for(new i = 1; i < 33; i++)
-	{
-		if(is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i)) count++;
-	}
-	return count;
+	new players[32], pnum; get_players(players, pnum, "ch");
+	return pnum;
 }
 stock ValidMap(map[])
 {
@@ -1175,7 +1169,7 @@ stock ValidMap(map[])
 	
 	return false;
 }
-stock is_map_in_array(map[])
+is_map_in_array(map[])
 {
 	new eMapInfo[MAP_INFO], iSize = ArraySize(g_aMaps);
 	for(new i; i < iSize; i++)
@@ -1217,7 +1211,7 @@ ClearBlockedMaps()
 	g_iBlockedSize = 0;
 }
 #endif
-stock is_map_in_menu(index)
+is_map_in_menu(index)
 {
 	for(new i; i < sizeof(g_eMenuItems); i++)
 	{
@@ -1277,28 +1271,12 @@ stock SendAudio(id, audio[], pitch)
 {
 	static iMsgSendAudio;
 	if(!iMsgSendAudio) iMsgSendAudio = get_user_msgid("SendAudio");
-	
-	if(id)
-	{
-		message_begin(MSG_ONE_UNRELIABLE, iMsgSendAudio, _, id);
-		write_byte(id);
-		write_string(audio);
-		write_short(pitch);
-		message_end();
-	}
-	else
-	{
-		new iPlayers[32], pNum; get_players(iPlayers, pNum, "ch");
-		for(new id, i; i < pNum; i++)
-		{
-			id = iPlayers[i];
-			message_begin(MSG_ONE_UNRELIABLE, iMsgSendAudio, _, id);
-			write_byte(id);
-			write_string(audio);
-			write_short(pitch);
-			message_end();
-		}
-	}
+
+	message_begin( id ? MSG_ONE_UNRELIABLE : MSG_BROADCAST, iMsgSendAudio, _, id);
+	write_byte(id);
+	write_string(audio);
+	write_short(pitch);
+	message_end();
 }
 stock Intermission()
 {
