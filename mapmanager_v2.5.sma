@@ -2,10 +2,12 @@
 
 #if AMXX_VERSION_NUM < 183
 #include <colorchat>
+#else
+#define client_disconnect client_disconnected
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.8"
+#define VERSION "2.5.9"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -808,9 +810,9 @@ public StartVote(id)
 	new Item = 0;
 	
 	#if defined FUNCTION_BLOCK_MAPS
-	new iMaxItems = min(SELECT_MAPS, iGlobalSize - g_iBlockedSize);
+	new iMaxItems = min(min(SELECT_MAPS, iGlobalSize - g_iBlockedSize), 8);
 	#else
-	new iMaxItems = min(SELECT_MAPS, iGlobalSize);
+	new iMaxItems = min(min(SELECT_MAPS, iGlobalSize), 8);
 	#endif
 	
 	#if defined FUNCTION_NOMINATION
