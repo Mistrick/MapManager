@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.10"
+#define VERSION "2.5.11"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -39,10 +39,11 @@ new const PREFIX[] = "^4[MapManager]";
 
 enum (+=100)
 {
-	TASK_CHECKTIME,
+	TASK_CHECKTIME = 100,
 	TASK_SHOWTIMER,
 	TASK_TIMER,
-	TASK_VOTEMENU
+	TASK_VOTEMENU,
+	TASK_CHANGETODEFAULT
 };
 
 enum _:MAP_INFO
@@ -82,6 +83,8 @@ enum _:CVARS
 	FREEZE_IN_VOTE,
 	BLACK_SCREEN_IN_VOTE,
 	LAST_ROUND,
+	CHANGE_TO_DEDAULT,
+	DEFAULT_MAP,
 	EXENDED_MAX,
 	EXENDED_TIME,
 #if defined FUNCTION_RTV
@@ -160,6 +163,9 @@ public plugin_init()
 	g_pCvars[FREEZE_IN_VOTE] = register_cvar("mm_freeze_in_vote", "0");//0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
 	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mm_black_screen_in_vote", "0");//0 - disable, 1 - enable
 	g_pCvars[LAST_ROUND] = register_cvar("mm_last_round", "0");//0 - disable, 1 - enable
+	
+	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mm_change_to_default_map", "1");//minutes, 0 - disable
+	g_pCvars[DEFAULT_MAP] = register_cvar("mm_default_map", "de_dust2");
 	
 	g_pCvars[EXENDED_MAX] = register_cvar("mm_extended_map_max", "3");
 	g_pCvars[EXENDED_TIME] = register_cvar("mm_extended_time", "15");//minutes
@@ -510,6 +516,11 @@ public MapsListMenu_Handler(id, key)
 	return PLUGIN_HANDLED;
 }
 #endif
+public client_putinserver(id)
+{
+	if(!is_user_bot(id) && !is_user_hltv(id))
+		remove_task(TASK_CHANGETODEFAULT);
+}
 public client_disconnect(id)
 {
 	remove_task(id + TASK_VOTEMENU);
@@ -528,6 +539,25 @@ public client_disconnect(id)
 		ClearNominatedMaps(id);
 	}
 	#endif
+	
+	set_task(1.0, "Task_DelayCheckChangeToDelault");
+}
+public Task_DelayCheckChangeToDelault()
+{
+	new Float:fChangeTime = get_pcvar_float(g_pCvars[CHANGE_TO_DEDAULT]);
+	if(fChangeTime > 0.0 && GetPlayersNum() == 0)
+	{
+		set_task(fChangeTime * 60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
+	}
+}
+public Task_ChangeToDefault()
+{
+	new szMapName[32]; get_pcvar_string(g_pCvars[DEFAULT_MAP], szMapName, charsmax(szMapName));
+	if(GetPlayersNum() == 0 && is_map_valid(szMapName) && !equali(szMapName, g_szCurrentMap))
+	{		
+		set_pcvar_string(g_pCvars[NEXTMAP], szMapName);
+		Intermission();
+	}
 }
 public plugin_end()
 {
