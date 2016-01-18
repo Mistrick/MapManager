@@ -28,12 +28,15 @@ Cvars:
 - mm_start_vote_in_new_round :: 0 - disable, 1 - enable
 - mm_freeze_in_vote :: 0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
 - mm_black_screen_in_vote :: 0 - disable, 1 - enable
+- mm_last_round :: 0 - disable, 1 - enable
 - mm_extended_map_max
 - mm_extended_time :: minutes
 - mm_rtv_mode :: 0 - percents, 1 - players
 - mm_rtv_percent
 - mm_rtv_players
 - mm_rtv_change_type :: 0 - after vote, 1 - in round end
+- mm_rtv_delay :: minutes
+- mm_nomination_dont_close_menu :: 0 - disable, 1 - enable
 
 TODO:
 - Night mode
