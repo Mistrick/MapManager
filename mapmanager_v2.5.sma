@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.11"
+#define VERSION "2.5.14"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -94,6 +94,9 @@ enum _:CVARS
 	ROCK_CHANGE_TYPE,
 	ROCK_DELAY,
 #endif
+#if defined FUNCTION_NOMINATION
+	NOMINATION_DONT_CLOSE_MENU,
+#endif
 	MAXROUNDS,
 	WINLIMIT,
 	TIMELIMIT,
@@ -142,7 +145,7 @@ new g_bRockVote;
 new Array:g_aNominatedMaps;
 new g_iNominatedMaps[33];
 new g_iPage[33];
-new g_szMapPrefixes[][] = {"deathrun_", "de_"};
+new g_szMapPrefixes[][] = {"deathrun_", "de_", "css_"};
 #endif
 
 #if defined FUNCTION_BLOCK_MAPS
@@ -176,6 +179,10 @@ public plugin_init()
 	g_pCvars[ROCK_PLAYERS] = register_cvar("mm_rtv_players", "5");
 	g_pCvars[ROCK_CHANGE_TYPE] = register_cvar("mm_rtv_change_type", "1");//0 - after vote, 1 - in round end
 	g_pCvars[ROCK_DELAY] = register_cvar("mm_rtv_delay", "0");//minutes
+	#endif
+	
+	#if defined FUNCTION_NOMINATION
+	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mm_nomination_dont_close_menu", "0");//0 - disable, 1 - enable
 	#endif
 	
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
@@ -239,7 +246,17 @@ public Commang_Debug(id)
 public Command_StartVote(id, flag)
 {
 	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
-	StartVote(id);	
+	
+	if(get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]) == 0)
+	{
+		StartVote(id);
+	}
+	else
+	{
+		g_bStartVote = true;
+		client_print_color(0, print_team_default, "%s^1 Голосование начнется в следующем раунде.", PREFIX);
+	}
+	
 	return PLUGIN_HANDLED;
 }
 public Command_StopVote(id, flag)
@@ -284,7 +301,7 @@ public Command_StopVote(id, flag)
 public Command_Nextmap(id)
 {
 	new szMap[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMap, charsmax(szMap));
-	client_print_color(0, id, "%s^1 Следующая карта: ^3%s^1.", PREFIX, szMap);
+	client_print_color(0, id, "%s^1 Следующая карта: ^3%s^1.", PREFIX, g_bVoteFinished ? szMap : "ещё не выбрана");
 }
 public Command_CurrentMap(id)
 {
@@ -367,16 +384,65 @@ public Command_Say(id)
 	}
 	else
 	{
+		new szFormat[32], Array:aNominateList = ArrayCreate(VOTEMENU_INFO), iArraySize, eNomInfo[VOTEMENU_INFO];
 		for(new i; i < sizeof(g_szMapPrefixes); i++)
 		{
-			new szFormat[32]; formatex(szFormat, charsmax(szFormat), "%s%s", g_szMapPrefixes[i], szText);
+			formatex(szFormat, charsmax(szFormat), "%s%s", g_szMapPrefixes[i], szText);
 			map_index = is_map_in_array(szFormat);
 			if(map_index)
 			{
-				NominateMap(id, szFormat, map_index - 1); break;
+				eNomInfo[v_MapName] = szFormat;
+				eNomInfo[v_MapIndex] = map_index - 1;
+				ArrayPushArray(aNominateList, eNomInfo);
+				iArraySize++;
 			}
 		}
+		
+		if(iArraySize == 1)
+		{
+			NominateMap(id, szFormat, map_index - 1);
+		}
+		else if(iArraySize > 1)
+		{
+			Show_NominationList(id, aNominateList, iArraySize);
+		}
+		
+		ArrayDestroy(aNominateList);
 	}
+}
+public Show_NominationList(id, Array: array, size)
+{
+	new iMenu = menu_create("Найдено несколько карт:", "NominationList_Handler");
+	new eNomInfo[VOTEMENU_INFO];
+	
+	for(new i, szNum[8]; i < size; i++)
+	{
+		ArrayGetArray(array, i, eNomInfo);
+		num_to_str(eNomInfo[v_MapIndex], szNum, charsmax(szNum));
+		menu_additem(iMenu, eNomInfo[v_MapName], szNum);
+	}
+	menu_setprop(iMenu, MPROP_BACKNAME, "Назад");
+	menu_setprop(iMenu, MPROP_NEXTNAME, "Далее");
+	menu_setprop(iMenu, MPROP_EXITNAME, "Выход");
+	
+	menu_display(id, iMenu);
+}
+public NominationList_Handler(id, menu, item)
+{
+	if(item == MENU_EXIT)
+	{
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	
+	new szData[8], szName[32], iAccess, iCallback;
+	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
+	
+	new map_index = str_to_num(szData);
+	NominateMap(id, szName, map_index);
+	
+	menu_destroy(menu);
+	return PLUGIN_HANDLED;
 }
 NominateMap(id, map[32], map_index)
 {
@@ -507,7 +573,7 @@ public MapsListMenu_Handler(id, key)
 			new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
 			new szMapName[32]; formatex(szMapName, charsmax(szMapName), eMapInfo[m_MapName]);
 			NominateMap(id, szMapName, map_index);
-			if(g_iNominatedMaps[id] < NOMINATED_MAPS_PER_PLAYER)
+			if(g_iNominatedMaps[id] < NOMINATED_MAPS_PER_PLAYER || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
 			{
 				Show_MapsListMenu(id, g_iPage[id]);
 			}
@@ -919,7 +985,8 @@ ForwardPreStartVote()
 {
 	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
 	{
-		SetBlackScreenFade(1);
+		SetBlackScreenFade(2);
+		set_task(1.0, "SetBlackScreenFade", 1);
 	}
 	
 	#if PRE_START_TIME > 0
@@ -1313,7 +1380,7 @@ stock Intermission()
 	emessage_begin(MSG_ALL, SVC_INTERMISSION);
 	emessage_end();
 }
-stock SetBlackScreenFade(fade)
+public SetBlackScreenFade(fade)
 {
 	new time, hold, flags;
 	static iMsgScreenFade; 
@@ -1326,7 +1393,13 @@ stock SetBlackScreenFade(fade)
 			time = 1;
 			hold = 1;
 			flags = 4;
-		}	
+		}
+		case 2:
+		{
+			time = 4096;
+			hold = 1024;
+			flags = 1;
+		}
 		default:
 		{
 			time = 4096;
