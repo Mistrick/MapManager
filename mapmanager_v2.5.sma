@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.16"
+#define VERSION "2.5.17"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -27,7 +27,7 @@
 #define NOMINATED_MAPS_IN_VOTE 3
 #define NOMINATED_MAPS_PER_PLAYER 3
 
-#define BLOCK_MAP_COUNT 10
+#define BLOCK_MAP_COUNT 5
 
 new const PREFIX[] = "^4[MapManager]";
 
@@ -207,6 +207,7 @@ public plugin_init()
 	register_concmd("mm_debug", "Commang_Debug", ADMIN_MAP);
 	register_concmd("mm_startvote", "Command_StartVote", ADMIN_MAP);
 	register_concmd("mm_stopvote", "Command_StopVote", ADMIN_MAP);
+	register_clcmd("say timeleft", "Command_Timeleft");
 	
 	#if defined FUNCTION_NEXTMAP
 	register_clcmd("say nextmap", "Command_Nextmap");
@@ -308,6 +309,18 @@ public Command_StopVote(id, flag)
 	
 	return PLUGIN_HANDLED;
 }
+public Command_Timeleft(id)
+{
+	if (get_pcvar_num(g_pCvars[TIMELIMIT]))
+	{
+		new a = get_timeleft();
+		client_print_color(0, id, "%s^1 До конца карты осталось:^3 %d:%02d", PREFIX, (a / 60), (a % 60));
+	}
+	else
+	{
+		client_print_color(0, print_team_default, "%s^1 Карта не ограничена по времени.", PREFIX);
+	}
+}
 
 #if defined FUNCTION_NEXTMAP
 public Command_Nextmap(id)
@@ -394,7 +407,7 @@ public Command_Say(id)
 	{
 		NominateMap(id, szText, map_index - 1);
 	}
-	else
+	else if(strlen(szText) >= 4)
 	{
 		new szFormat[32], szPrefix[32], Array:aNominateList = ArrayCreate(), iArraySize;
 		for(new i; i < g_iMapPrefixesNum; i++)
@@ -427,7 +440,7 @@ public Command_Say(id)
 public Show_NominationList(id, Array: array, size)
 {
 	new iMenu = menu_create("Найдено несколько карт:", "NominationList_Handler");
-	new eMapInfo[MAP_INFO], szString[64], map_index;
+	new eMapInfo[MAP_INFO], szString[64], map_index, nominate_index;
 	
 	for(new i, szNum[8]; i < size; i++)
 	{
@@ -436,10 +449,26 @@ public Show_NominationList(id, Array: array, size)
 		
 		num_to_str(map_index, szNum, charsmax(szNum));
 		
+		nominate_index = is_map_nominated(map_index);
+		
 		if(eMapInfo[m_BlockCount])
 		{
 			formatex(szString, charsmax(szString), "%s[\r%d\d]", eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
 			menu_additem(iMenu, szString, szNum, (1 << 31));
+		}
+		else if(nominate_index)
+		{
+			new eNomInfo[NOMINATEDMAP_INFO]; ArrayGetArray(g_aNominatedMaps, nominate_index - 1, eNomInfo);
+			if(id == eNomInfo[n_Player])
+			{
+				formatex(szString, charsmax(szString), "%s[\y*\w]", eMapInfo[m_MapName]);
+				menu_additem(iMenu, szString, szNum);
+			}
+			else
+			{
+				formatex(szString, charsmax(szString), "%s[\y*\d]", eMapInfo[m_MapName]);
+				menu_additem(iMenu, szString, szNum, (1 << 31));
+			}
 		}
 		else
 		{
@@ -464,9 +493,27 @@ public NominationList_Handler(id, menu, item)
 	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
 	
 	new map_index = str_to_num(szData);
-	NominateMap(id, szName, map_index);
+	trim_bracket(szName);
+	new is_map_nominated = NominateMap(id, szName, map_index);
 	
-	menu_destroy(menu);
+	if(get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
+	{
+		if(is_map_nominated == 1)
+		{
+			new szString[48]; formatex(szString, charsmax(szString), "%s[\y*\w]", szName);
+			menu_item_setname(menu, item, szString);
+		}
+		else if(is_map_nominated == 2)
+		{
+			menu_item_setname(menu, item, szName);
+		}
+		menu_display(id, menu);
+	}
+	else
+	{
+		menu_destroy(menu);
+	}
+	
 	return PLUGIN_HANDLED;
 }
 NominateMap(id, map[32], map_index)
@@ -476,7 +523,7 @@ NominateMap(id, map[32], map_index)
 	if(eMapInfo[m_BlockCount])
 	{
 		client_print_color(id, print_team_default, "%s^1 Эта карта недоступна для номинации.", PREFIX);
-		return PLUGIN_CONTINUE;
+		return 0;
 	}
 	#endif
 	
@@ -493,16 +540,16 @@ NominateMap(id, map[32], map_index)
 			ArrayDeleteItem(g_aNominatedMaps, nominate_index - 1);
 			
 			client_print_color(0, id, "%s^3 %s^1 убрал номинацию с карты^3 %s^1.", PREFIX, szName, map);
-			return PLUGIN_CONTINUE;
+			return 2;
 		}
 		client_print_color(id, print_team_default, "%s^1 Эта карта уже номинирована.", PREFIX);
-		return PLUGIN_CONTINUE;
+		return 0;
 	}
 	
 	if(g_iNominatedMaps[id] >= NOMINATED_MAPS_PER_PLAYER)
 	{
 		client_print_color(id, print_team_default, "%s^1 Вы не можете больше номинировать карты.", PREFIX);
-		return PLUGIN_CONTINUE;
+		return 0;
 	}
 	
 	eNomInfo[n_MapName] = map;
@@ -514,7 +561,7 @@ NominateMap(id, map[32], map_index)
 	
 	client_print_color(0, id, "%s^3 %s^1 номинировал на голосование^3 %s^1.", PREFIX, szName, map);
 	
-	return PLUGIN_CONTINUE;
+	return 1;
 }
 public Command_MapsList(id)
 {
@@ -797,7 +844,6 @@ LoadMapsFromFile()
 				
 				ArrayPushArray(g_aMaps, eMapInfo);
 				szMin = ""; szMax = "";
-				
 			}
 			fclose(f);
 			
@@ -956,6 +1002,7 @@ public StartVote(id)
 		
 		formatex(g_eMenuItems[Item][v_MapName], charsmax(g_eMenuItems[][v_MapName]), eNomInfo[n_MapName]);
 		g_eMenuItems[Item][v_MapIndex] = eNomInfo[n_MapIndex];
+		g_iNominatedMaps[eNomInfo[n_Player]]--;
 		
 		ArrayDeleteItem(g_aNominatedMaps, iRandomMap);
 		
@@ -1430,6 +1477,17 @@ find_similar_map(map_index, string[32])
 		}
 	}
 	return 0;
+}
+trim_bracket(text[])
+{
+	for(new i; text[i]; i++)
+	{
+		if(text[i] == '[')
+		{
+			text[i] = 0;
+			break;
+		}
+	}
 }
 #endif
 stock GetEnding(num, const a[], const b[], const c[], output[], lenght)
