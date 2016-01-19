@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.14"
+#define VERSION "2.5.16"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -145,7 +145,8 @@ new g_bRockVote;
 new Array:g_aNominatedMaps;
 new g_iNominatedMaps[33];
 new g_iPage[33];
-new g_szMapPrefixes[][] = {"deathrun_", "de_", "css_"};
+new Array:g_aMapPrefixes;
+new g_iMapPrefixesNum;
 #endif
 
 #if defined FUNCTION_BLOCK_MAPS
@@ -167,7 +168,7 @@ public plugin_init()
 	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mm_black_screen_in_vote", "0");//0 - disable, 1 - enable
 	g_pCvars[LAST_ROUND] = register_cvar("mm_last_round", "0");//0 - disable, 1 - enable
 	
-	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mm_change_to_default_map", "1");//minutes, 0 - disable
+	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mm_change_to_default_map", "0");//minutes, 0 - disable
 	g_pCvars[DEFAULT_MAP] = register_cvar("mm_default_map", "de_dust2");
 	
 	g_pCvars[EXENDED_MAX] = register_cvar("mm_extended_map_max", "3");
@@ -241,6 +242,17 @@ public Commang_Debug(id)
 		ArrayGetArray(g_aMaps, i, eMapInfo);
 		console_print(id, "%3d %32s ^t%d^t%d^t%d", i, eMapInfo[m_MapName], eMapInfo[m_MinPlayers], eMapInfo[m_MaxPlayers], eMapInfo[m_BlockCount]);
 	}
+	
+	#if defined FUNCTION_NOMINATION
+	new szPrefix[32];
+	console_print(id, "^nLoaded prefixes:");
+	for(new i; i < g_iMapPrefixesNum; i++)
+	{
+		ArrayGetString(g_aMapPrefixes, i, szPrefix, charsmax(szPrefix));
+		console_print(id, "%s", szPrefix);
+	}
+	#endif
+	
 	return PLUGIN_HANDLED;
 }
 public Command_StartVote(id, flag)
@@ -384,23 +396,25 @@ public Command_Say(id)
 	}
 	else
 	{
-		new szFormat[32], Array:aNominateList = ArrayCreate(VOTEMENU_INFO), iArraySize, eNomInfo[VOTEMENU_INFO];
-		for(new i; i < sizeof(g_szMapPrefixes); i++)
+		new szFormat[32], szPrefix[32], Array:aNominateList = ArrayCreate(), iArraySize;
+		for(new i; i < g_iMapPrefixesNum; i++)
 		{
-			formatex(szFormat, charsmax(szFormat), "%s%s", g_szMapPrefixes[i], szText);
-			map_index = is_map_in_array(szFormat);
-			if(map_index)
+			ArrayGetString(g_aMapPrefixes, i, szPrefix, charsmax(szPrefix));
+			formatex(szFormat, charsmax(szFormat), "%s%s", szPrefix, szText);
+			map_index = 0;
+			while((map_index = find_similar_map(map_index, szFormat)))
 			{
-				eNomInfo[v_MapName] = szFormat;
-				eNomInfo[v_MapIndex] = map_index - 1;
-				ArrayPushArray(aNominateList, eNomInfo);
+				ArrayPushCell(aNominateList, map_index - 1);
 				iArraySize++;
 			}
 		}
 		
 		if(iArraySize == 1)
 		{
-			NominateMap(id, szFormat, map_index - 1);
+			map_index = ArrayGetCell(aNominateList, 0);
+			new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
+			copy(szFormat, charsmax(szFormat), eMapInfo[m_MapName]);
+			NominateMap(id, szFormat, map_index);
 		}
 		else if(iArraySize > 1)
 		{
@@ -413,13 +427,24 @@ public Command_Say(id)
 public Show_NominationList(id, Array: array, size)
 {
 	new iMenu = menu_create("Найдено несколько карт:", "NominationList_Handler");
-	new eNomInfo[VOTEMENU_INFO];
+	new eMapInfo[MAP_INFO], szString[64], map_index;
 	
 	for(new i, szNum[8]; i < size; i++)
 	{
-		ArrayGetArray(array, i, eNomInfo);
-		num_to_str(eNomInfo[v_MapIndex], szNum, charsmax(szNum));
-		menu_additem(iMenu, eNomInfo[v_MapName], szNum);
+		map_index = ArrayGetCell(array, i);
+		ArrayGetArray(g_aMaps, map_index, eMapInfo);
+		
+		num_to_str(map_index, szNum, charsmax(szNum));
+		
+		if(eMapInfo[m_BlockCount])
+		{
+			formatex(szString, charsmax(szString), "%s[\r%d\d]", eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
+			menu_additem(iMenu, szString, szNum, (1 << 31));
+		}
+		else
+		{
+			menu_additem(iMenu, eMapInfo[m_MapName], szNum);
+		}
 	}
 	menu_setprop(iMenu, MPROP_BACKNAME, "Назад");
 	menu_setprop(iMenu, MPROP_NEXTNAME, "Далее");
@@ -521,7 +546,7 @@ public Show_MapsListMenu(id, iPage)
 		
 		if(eMapInfo[m_BlockCount])
 		{
-			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\d %s[\r%d\d]", ++Item, eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
+			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\d%d. %s[\r%d\d]", ++Item, eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
 		}
 		else if(iNominated)
 		{
@@ -642,6 +667,7 @@ public plugin_cfg()
 	
 	#if defined FUNCTION_NOMINATION
 	g_aNominatedMaps = ArrayCreate(NOMINATEDMAP_INFO);
+	g_aMapPrefixes = ArrayCreate(32);
 	#endif
 	
 	if( is_plugin_loaded("Nextmap Chooser") > -1 )
@@ -753,6 +779,15 @@ LoadMapsFromFile()
 				else
 				{
 					eMapInfo[m_BlockCount] = 0;
+				}
+				#endif
+				
+				#if defined FUNCTION_NOMINATION
+				new szPrefix[32];
+				if(GetMapPrefix(szMap, szPrefix, charsmax(szPrefix)) && !is_prefix_in_array(szPrefix))
+				{
+					ArrayPushString(g_aMapPrefixes, szPrefix);
+					g_iMapPrefixesNum++;
 				}
 				#endif
 				
@@ -1015,7 +1050,7 @@ public ShowTimer()
 	for(new id, i; i < pNum; i++)
 	{
 		id = iPlayers[i];
-		set_hudmessage(50, 255, 50, -1.0, is_user_alive(id) ? 0.9 : 0.3, 0, 0.0, 1.0, 0.0, 0.0, 1);
+		set_hudmessage(50, 255, 50, -1.0, is_user_alive(id) ? 0.9 : 0.3, 0, 0.0, 1.0, 0.0, 0.0, 4);
 		show_hudmessage(id, "До голосования осталось %d %s!", g_iTimer, szSec);
 	}
 	
@@ -1355,6 +1390,46 @@ ClearNominatedMaps(id)
 			if(!--g_iNominatedMaps[id]) break;
 		}
 	}
+}
+is_prefix_in_array(prefix[])
+{
+	new string[32];
+	for(new i; i < g_iMapPrefixesNum; i++)
+	{
+		ArrayGetString(g_aMapPrefixes, i, string, charsmax(string));
+		if(equali(prefix, string))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+GetMapPrefix(map[], prefix[], size)
+{
+	new map_copy[32]; copy(map_copy, charsmax(map_copy), map);
+	for(new i; map_copy[i]; i++)
+	{
+		if(map_copy[i] == '_')
+		{
+			map_copy[i + 1] = 0;
+			copy(prefix, size, map_copy);
+			return 1;
+		}
+	}
+	return 0;
+}
+find_similar_map(map_index, string[32])
+{
+	new eMapInfo[MAP_INFO], iSize = ArraySize(g_aMaps);
+	for(new i = map_index; i < iSize; i++)
+	{
+		ArrayGetArray(g_aMaps, i, eMapInfo);
+		if(containi(eMapInfo[m_MapName], string) != -1)
+		{
+			return i + 1;
+		}
+	}
+	return 0;
 }
 #endif
 stock GetEnding(num, const a[], const b[], const c[], output[], lenght)
