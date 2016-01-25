@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.17"
+#define VERSION "2.5.18"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -17,6 +17,7 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
+#define FUNCTION_NIGHTMODE
 #define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
 
@@ -43,7 +44,8 @@ enum (+=100)
 	TASK_SHOWTIMER,
 	TASK_TIMER,
 	TASK_VOTEMENU,
-	TASK_CHANGETODEFAULT
+	TASK_CHANGETODEFAULT,
+	TASK_CHECKNIGHT
 };
 
 enum _:MAP_INFO
@@ -97,6 +99,9 @@ enum _:CVARS
 #if defined FUNCTION_NOMINATION
 	NOMINATION_DONT_CLOSE_MENU,
 #endif
+#if defined FUNCTION_NIGHTMODE
+	NIGHTMODE_TIME,
+#endif
 	MAXROUNDS,
 	WINLIMIT,
 	TIMELIMIT,
@@ -105,10 +110,14 @@ enum _:CVARS
 	NEXTMAP
 };
 
-new const MAPS_FILE[] = "maps.ini";//configdir
+new const FILE_MAPS[] = "maps.ini";//configdir
 
 #if defined FUNCTION_BLOCK_MAPS
 new const FILE_BLOCKEDMAPS[] = "blockedmaps.ini";//datadir
+#endif
+
+#if defined FUNCTION_NIGHTMODE
+new const FILE_NIGHTMAPS[] = "nightmaps.ini";//configdir
 #endif
 
 new g_pCvars[CVARS];
@@ -153,6 +162,14 @@ new g_iMapPrefixesNum;
 new g_iBlockedSize;
 #endif
 
+#if defined FUNCTION_NIGHTMODE
+new Array:g_aNightMaps;
+new g_bNightMode;
+new g_bNightModeOneMap;
+new g_bCurMapInNightMode;
+new Float:g_fOldNightTimeLimit;
+#endif
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
@@ -184,6 +201,10 @@ public plugin_init()
 	
 	#if defined FUNCTION_NOMINATION
 	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mm_nomination_dont_close_menu", "0");//0 - disable, 1 - enable
+	#endif
+	
+	#if defined FUNCTION_NIGHTMODE
+	g_pCvars[NIGHTMODE_TIME] = register_cvar("mm_night_time", "00:00 8:00");
 	#endif
 	
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
@@ -233,7 +254,23 @@ public plugin_init()
 	#endif
 	
 	set_task(10.0, "Task_CheckTime", TASK_CHECKTIME, .flags = "b");
+	
+	#if defined FUNCTION_NIGHTMODE
+	set_task(60.0, "Task_CheckNight", TASK_CHECKNIGHT, .flags = "b");
+	#endif
 }
+
+#if defined FUNCTION_NIGHTMODE
+public plugin_natives()
+{
+	register_native("is_night_mode", "Native_IsNightMode");
+}
+public Native_IsNightMode()
+{
+	return g_bNightMode;
+}
+#endif
+
 public Commang_Debug(id)
 {
 	console_print(id, "^nLoaded maps:");	
@@ -355,7 +392,7 @@ public Command_RockTheVote(id)
 	}
 	else
 	{
-		iVotes = floatround(GetPlayersNum() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRockVotes;
+		iVotes = floatround(get_players_num() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRockVotes;
 	}
 	
 	if(!g_bRockVoted[id])
@@ -365,7 +402,7 @@ public Command_RockTheVote(id)
 		if(iVotes > 0)
 		{
 			new szName[33];	get_user_name(id, szName, charsmax(szName));
-			new szVote[16];	GetEnding(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
+			new szVote[16];	get_ending(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
 			client_print_color(0, print_team_default, "%s^3 %s^1 проголосовал за смену карты. Осталось:^3 %d^1 %s.", PREFIX, szName, iVotes, szVote);
 		}
 		else
@@ -385,7 +422,7 @@ public Command_RockTheVote(id)
 	}
 	else
 	{
-		new szVote[16];	GetEnding(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
+		new szVote[16];	get_ending(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
 		client_print_color(id, print_team_default, "%s^1 Вы уже голосовали. Осталось:^3 %d^1 %s.", PREFIX, iVotes, szVote);
 	}
 	
@@ -400,6 +437,8 @@ public Command_Say(id)
 	
 	new szText[32]; read_args(szText, charsmax(szText));
 	remove_quotes(szText); trim(szText); strtolower(szText);
+	
+	if(string_with_space(szText)) return;
 	
 	new map_index = is_map_in_array(szText);
 	
@@ -496,7 +535,7 @@ public NominationList_Handler(id, menu, item)
 	trim_bracket(szName);
 	new is_map_nominated = NominateMap(id, szName, map_index);
 	
-	if(get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
+	if(is_map_nominated == 2 || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
 	{
 		if(is_map_nominated == 1)
 		{
@@ -674,7 +713,7 @@ public client_disconnect(id)
 	#if defined FUNCTION_NOMINATION
 	if(g_iNominatedMaps[id])
 	{
-		ClearNominatedMaps(id);
+		clear_nominated_maps(id);
 	}
 	#endif
 	
@@ -683,7 +722,7 @@ public client_disconnect(id)
 public Task_DelayCheckChangeToDelault()
 {
 	new Float:fChangeTime = get_pcvar_float(g_pCvars[CHANGE_TO_DEDAULT]);
-	if(fChangeTime > 0.0 && GetPlayersNum() == 0)
+	if(fChangeTime > 0.0 && get_players_num() == 0)
 	{
 		set_task(fChangeTime * 60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
 	}
@@ -691,7 +730,7 @@ public Task_DelayCheckChangeToDelault()
 public Task_ChangeToDefault()
 {
 	new szMapName[32]; get_pcvar_string(g_pCvars[DEFAULT_MAP], szMapName, charsmax(szMapName));
-	if(GetPlayersNum() == 0 && is_map_valid(szMapName) && !equali(szMapName, g_szCurrentMap))
+	if(get_players_num() == 0 && is_map_valid(szMapName) && !equali(szMapName, g_szCurrentMap))
 	{		
 		set_pcvar_string(g_pCvars[NEXTMAP], szMapName);
 		Intermission();
@@ -699,6 +738,13 @@ public Task_ChangeToDefault()
 }
 public plugin_end()
 {
+	#if defined FUNCTION_NIGHTMODE
+	if(g_fOldNightTimeLimit > 0.0)
+	{
+		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldNightTimeLimit);
+	}
+	#endif
+	
 	if(g_fOldTimeLimit > 0.0)
 	{
 		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
@@ -732,6 +778,10 @@ public plugin_cfg()
 	#endif
 	
 	LoadMapsFromFile();
+	
+	#if defined FUNCTION_NIGHTMODE
+	LoadNightMaps();
+	#endif
 }
 LoadMapsFromFile()
 {
@@ -799,7 +849,7 @@ LoadMapsFromFile()
 	#endif
 	
 	get_localinfo("amxx_configsdir", szDir, charsmax(szDir));
-	formatex(szFile, charsmax(szFile), "%s/%s", szDir, MAPS_FILE);
+	formatex(szFile, charsmax(szFile), "%s/%s", szDir, FILE_MAPS);
 	
 	if(file_exists(szFile))
 	{
@@ -814,7 +864,7 @@ LoadMapsFromFile()
 				fgets(f, szText, charsmax(szText));
 				parse(szText, szMap, charsmax(szMap), szMin, charsmax(szMin), szMax, charsmax(szMax));
 				
-				if(!szMap[0] || szMap[0] == ';' || !ValidMap(szMap) || is_map_in_array(szMap) || equali(szMap, g_szCurrentMap)) continue;
+				if(!szMap[0] || szMap[0] == ';' || !valid_map(szMap) || is_map_in_array(szMap) || equali(szMap, g_szCurrentMap)) continue;
 				
 				#if defined FUNCTION_BLOCK_MAPS
 				new blocked_index = is_map_blocked(aBlockedMaps, szMap);
@@ -831,7 +881,7 @@ LoadMapsFromFile()
 				
 				#if defined FUNCTION_NOMINATION
 				new szPrefix[32];
-				if(GetMapPrefix(szMap, szPrefix, charsmax(szPrefix)) && !is_prefix_in_array(szPrefix))
+				if(get_map_prefix(szMap, szPrefix, charsmax(szPrefix)) && !is_prefix_in_array(szPrefix))
 				{
 					ArrayPushString(g_aMapPrefixes, szPrefix);
 					g_iMapPrefixesNum++;
@@ -863,7 +913,7 @@ LoadMapsFromFile()
 			if(iSize - g_iBlockedSize < 1)
 			{
 				log_amx("LoadMaps: blocked maps cleared");
-				ClearBlockedMaps();
+				clear_blocked_maps();
 			}
 			ArrayDestroy(aBlockedMaps);
 			#endif
@@ -880,6 +930,55 @@ LoadMapsFromFile()
 		set_fail_state("Maps file doesn't exist.");
 	}
 }
+
+#if defined FUNCTION_NIGHTMODE
+LoadNightMaps()
+{
+	g_aNightMaps = ArrayCreate(32);
+	
+	new szDir[128]; get_localinfo("amxx_configsdir", szDir, charsmax(szDir));
+	new szFile[128]; formatex(szFile, charsmax(szFile), "%s/%s", szDir, FILE_NIGHTMAPS);
+	new iMapsCount;
+	if(file_exists(szFile))
+	{
+		new szMapName[32], f = fopen(szFile, "rt");
+		if(f)
+		{
+			while(!feof(f))
+			{
+				fgets(f, szMapName, charsmax(szMapName));
+				trim(szMapName); remove_quotes(szMapName);
+				
+				if(!szMapName[0] || szMapName[0] == ';' || !valid_map(szMapName) || is_map_in_night_array(szMapName))
+					continue;
+				
+				ArrayPushString(g_aNightMaps, szMapName);
+				iMapsCount++;
+			}
+			fclose(f);
+		}
+	}
+	if(iMapsCount < 1)
+	{
+		log_amx("LoadNightMaps: Need more maps");
+		remove_task(TASK_CHECKNIGHT);
+	}
+	else if(iMapsCount == 1)
+	{
+		g_bNightModeOneMap = true;
+	}
+	
+	if(is_map_in_night_array(g_szCurrentMap))
+	{
+		g_bCurMapInNightMode = true;
+	}
+	if(iMapsCount >= 1)
+	{
+		set_task(10.0, "Task_CheckNight");
+	}
+}
+#endif
+
 #if defined FUNCTION_NEXTMAP
 public Event_Intermisson()
 {
@@ -933,6 +1032,14 @@ public Event_NewRound()
 		client_print_color(0, print_team_default, "%s^1 Следующая карта:^3 %s^1.", PREFIX, szMapName);
 	}
 	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bVoteFinished && (g_bNightModeOneMap && get_pcvar_num(g_pCvars[CHANGE_TYPE]) >= 1 || !g_bCurMapInNightMode))
+	{
+		Intermission();
+		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
+		client_print_color(0, print_team_default, "%s^3 Ночной режим^1. Следующая карта:^3 %s^1.", PREFIX, szMapName);
+	}
+	#endif
 }
 public Event_TeamScore()
 {
@@ -955,10 +1062,100 @@ public Task_CheckTime()
 		{
 			g_bStartVote = true;
 		}
-	}	
+	}
 	
 	return PLUGIN_CONTINUE;
 }
+
+#if defined FUNCTION_NIGHTMODE
+public Task_CheckNight()
+{
+	new szTime[16]; get_pcvar_string(g_pCvars[NIGHTMODE_TIME], szTime, charsmax(szTime));
+	new szStart[8], szEnd[8]; parse(szTime, szStart, charsmax(szStart), szEnd, charsmax(szEnd));
+	new iStartHour, iStartMinutes, iEndHour, iEndMinutes;
+	get_int_time(szStart, iStartHour, iStartMinutes);
+	get_int_time(szEnd, iEndHour, iEndMinutes);
+	
+	get_time("%H:%M", szTime, charsmax(szTime));
+	new iCurHour, iCurMinutes; get_int_time(szTime, iCurHour, iCurMinutes);	
+	
+	new bOldNightMode = g_bNightMode;
+	
+	if(iStartHour != iEndHour && (iStartHour == iCurHour && iCurMinutes >= iStartMinutes || iEndHour == iCurHour && iCurMinutes < iEndMinutes))
+	{
+		g_bNightMode = true;
+	}
+	else if(iStartHour == iEndHour && iStartMinutes <= iCurMinutes < iEndMinutes)
+	{
+		g_bNightMode = true;
+	}
+	else if(iStartHour > iEndHour && (iStartHour < iCurHour < 24 || 0 <= iCurHour < iEndHour))
+	{
+		g_bNightMode = true;
+	}
+	else if(iStartHour < iCurHour < iEndHour)
+	{
+		g_bNightMode = true;
+	}
+	else
+	{
+		g_bNightMode = false;
+	}
+	
+	if(g_bNightMode && !bOldNightMode)// NightMode ON
+	{
+		if(g_bNightModeOneMap)
+		{
+			if(g_bCurMapInNightMode)
+			{
+				g_fOldNightTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
+				g_bVoteStarted = true;
+				set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
+				client_print_color(0, print_team_default, "%s^1 Включен ночной режим до^3 %02d:%02d^1.", PREFIX, iEndHour, iEndMinutes);
+			}
+			else
+			{
+				new szMapName[32]; ArrayGetString(g_aNightMaps, 0, szMapName, charsmax(szMapName));
+				set_pcvar_string(g_pCvars[NEXTMAP], szMapName);
+				
+				if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
+				{
+					Intermission();
+					client_print_color(0, print_team_default, "%s^1 Переход на^4 ночную карту^1:^3 %s.", PREFIX, szMapName);
+				}
+				else
+				{
+					g_bVoteFinished = true;
+					client_print_color(0, print_team_default, "%s^1 В следующем раунде переход на^4 ночную карту^1:^3 %s.", PREFIX, szMapName);
+				}
+			}
+		}
+		else if(!g_bCurMapInNightMode)
+		{
+			if(get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]) == 0)
+			{
+				client_print_color(0, print_team_default, "%s^1 Переход на^4 ночные карты^1.", PREFIX);
+				StartVote(0);
+			}
+			else
+			{
+				g_bStartVote = true;
+				client_print_color(0, print_team_default, "%s^1 В следующем раунде переход на^4 ночные карты^1.", PREFIX);
+			}
+		}
+	}
+	else if(!g_bNightMode && bOldNightMode)// NightMode OFF
+	{
+		if(g_bNightModeOneMap)
+		{
+			g_bVoteStarted = false;
+			set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldNightTimeLimit);
+		}
+		client_print_color(0, print_team_default, "%s^1 Выключен^4 ночной режим^1.", PREFIX);
+	}
+}
+#endif
+
 public StartVote(id)
 {
 	if(g_bVoteStarted) return 0;
@@ -968,9 +1165,32 @@ public StartVote(id)
 	
 	ResetInfo();
 	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode)
+	{
+		new iNightSize = ArraySize(g_aNightMaps);
+		g_iMenuItemsCount = min(min(g_bCurMapInNightMode ? iNightSize - 1 : iNightSize, SELECT_MAPS), 8);
+		
+		for(new Item, iRandomMap, szMapName[32]; Item < g_iMenuItemsCount; Item++)
+		{
+			do
+			{
+				iRandomMap = random_num(0, iNightSize - 1);
+				ArrayGetString(g_aNightMaps, iRandomMap, szMapName, charsmax(szMapName));
+			}
+			while(is_map_in_menu_by_string(szMapName) || equali(szMapName, g_szCurrentMap));
+			
+			formatex(g_eMenuItems[Item][v_MapName], charsmax(g_eMenuItems[][v_MapName]), szMapName);
+		}
+		
+		ForwardPreStartVote();
+		return 0;
+	}
+	#endif
+	
 	new Array:aMaps = ArrayCreate(VOTEMENU_INFO), iCurrentSize = 0;
 	new eMenuInfo[VOTEMENU_INFO], eMapInfo[MAP_INFO], iGlobalSize = ArraySize(g_aMaps);
-	new iPlayersNum = GetPlayersNum();
+	new iPlayersNum = get_players_num();
 	
 	for(new i = 0; i < iGlobalSize; i++)
 	{
@@ -1092,7 +1312,7 @@ public ShowTimer()
 		ShowVoteMenu();
 		return;
 	}
-	new szSec[16]; GetEnding(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
+	new szSec[16]; get_ending(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
 	new iPlayers[32], pNum; get_players(iPlayers, pNum, "ch");
 	for(new id, i; i < pNum; i++)
 	{
@@ -1171,10 +1391,14 @@ public VoteMenu(id)
 		}
 	}
 	
-	#if defined FUNCTION_RTV
-	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
+	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	#else
+	#if defined FUNCTION_NIGHTMODE
+	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
 	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#endif
 	#endif
 	{
 		iPercent = 0;
@@ -1194,7 +1418,7 @@ public VoteMenu(id)
 		}
 	}
 	
-	new szSec[16]; GetEnding(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
+	new szSec[16]; get_ending(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
 	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\dОсталось \r%d\d %s", g_iTimer, szSec);
 	
 	if(!iKeys) iKeys |= (1 << 9);
@@ -1275,7 +1499,7 @@ FinishVote()
 			case 0: if(g_eMenuItems[iMaxVote][v_Votes] < g_eMenuItems[i][v_Votes]) iMaxVote = i;
 			case 1: if(g_eMenuItems[iMaxVote][v_Votes] <= g_eMenuItems[i][v_Votes]) iMaxVote = i;
 		}
-	}	
+	}
 	
 	if(!g_iTotalVotes || (iMaxVote != g_iMenuItemsCount))
 	{
@@ -1313,26 +1537,25 @@ FinishVote()
 		{
 			client_print_color(0, print_team_default, "%s^1 Карта сменится в следующем раунде.", PREFIX);
 		}
-		
 	}
 	else
 	{
 		g_bVoteFinished = false;
 		g_iExtendedMax++;
 		new iMin = get_pcvar_num(g_pCvars[EXENDED_TIME]);
-		new szMin[16]; GetEnding(iMin, "минут", "минута", "минуты", szMin, charsmax(szMin));
+		new szMin[16]; get_ending(iMin, "минут", "минута", "минуты", szMin, charsmax(szMin));
 		
 		client_print_color(0, print_team_default, "^4%s^1 Текущая карта продлена на^3 %d^1 %s.", PREFIX, iMin, szMin);
 		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(iMin));
 	}
 }
 ///**************************///
-stock GetPlayersNum()
+stock get_players_num()
 {
 	new players[32], pnum; get_players(players, pnum, "ch");
 	return pnum;
 }
-stock ValidMap(map[])
+stock valid_map(map[])
 {
 	if(is_map_valid(map)) return true;
 	
@@ -1375,7 +1598,7 @@ is_map_blocked(Array:array, map[])
 	}
 	return 0;
 }
-ClearBlockedMaps()
+clear_blocked_maps()
 {
 	new eMapInfo[MAP_INFO], iSize = ArraySize(g_aMaps);
 	for(new i; i < iSize; i++)
@@ -1425,7 +1648,7 @@ is_map_in_priority(Array:array, map_index)
 	}
 	return 0;
 }
-ClearNominatedMaps(id)
+clear_nominated_maps(id)
 {
 	new eNomInfo[NOMINATEDMAP_INFO];
 	for(new i = 0; i < ArraySize(g_aNominatedMaps); i++)
@@ -1451,7 +1674,7 @@ is_prefix_in_array(prefix[])
 	}
 	return false;
 }
-GetMapPrefix(map[], prefix[], size)
+get_map_prefix(map[], prefix[], size)
 {
 	new map_copy[32]; copy(map_copy, charsmax(map_copy), map);
 	for(new i; map_copy[i]; i++)
@@ -1489,8 +1712,45 @@ trim_bracket(text[])
 		}
 	}
 }
+string_with_space(string[])
+{
+	for(new i; string[i]; i++)
+	{
+		if(string[i] == ' ') return 1;
+	}
+	return 0;
+}
 #endif
-stock GetEnding(num, const a[], const b[], const c[], output[], lenght)
+#if defined FUNCTION_NIGHTMODE
+is_map_in_night_array(map[])
+{
+	new szMapName[32], iMax = ArraySize(g_aNightMaps);
+	for(new i = 0; i < iMax; i++)
+	{
+		ArrayGetString(g_aNightMaps, i, szMapName, charsmax(szMapName));
+		if(equali(szMapName, map))
+		{
+			return i + 1;
+		}
+	}
+	return 0;
+}
+is_map_in_menu_by_string(map[])
+{
+	for(new i; i < sizeof(g_eMenuItems); i++)
+	{
+		if(equali(g_eMenuItems[i][v_MapName], map)) return true;
+	}
+	return false;
+}
+get_int_time(string[], &hour, &minutes)
+{
+	new left[4], right[4]; strtok(string, left, charsmax(left), right, charsmax(right), ':');
+	hour = str_to_num(left);
+	minutes = str_to_num(right);
+}
+#endif
+stock get_ending(num, const a[], const b[], const c[], output[], lenght)
 {
 	new num100 = num % 100, num10 = num % 10;
 	if(num100 >=5 && num100 <= 20 || num10 == 0 || num10 >= 5 && num10 <= 9) format(output, lenght, "%s", a);
