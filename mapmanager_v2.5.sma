@@ -2,12 +2,10 @@
 
 #if AMXX_VERSION_NUM < 183
 #include <colorchat>
-#else
-#define client_disconnect client_disconnected
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.20"
+#define VERSION "2.5.21"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -17,7 +15,7 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
-#define FUNCTION_NIGHTMODE
+//#define FUNCTION_NIGHTMODE
 #define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
 
@@ -229,6 +227,7 @@ public plugin_init()
 	register_concmd("mm_startvote", "Command_StartVote", ADMIN_MAP);
 	register_concmd("mm_stopvote", "Command_StopVote", ADMIN_MAP);
 	register_clcmd("say timeleft", "Command_Timeleft");
+	register_clcmd("say thetime", "Command_TheTime");
 	
 	#if defined FUNCTION_NEXTMAP
 	register_clcmd("say nextmap", "Command_Nextmap");
@@ -358,6 +357,11 @@ public Command_Timeleft(id)
 		client_print_color(0, print_team_default, "%s^1 Карта не ограничена по времени.", PREFIX);
 	}
 }
+public Command_TheTime(id)
+{
+	new szTime[64]; get_time("%Y/%m/%d - %H:%M:%S", szTime, charsmax(szTime));
+	client_print_color(0, print_team_default, "%s^3 Текущее время^1:^4 %s^1.", PREFIX, szTime);
+}
 
 #if defined FUNCTION_NEXTMAP
 public Command_Nextmap(id)
@@ -375,6 +379,14 @@ public Command_CurrentMap(id)
 public Command_RockTheVote(id)
 {
 	if(g_bVoteFinished || g_bVoteStarted) return PLUGIN_HANDLED;
+	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bNightModeOneMap)
+	{
+		client_print_color(id, print_team_default, "%s^1 Недоступно в^4 ночном режиме^1.", PREFIX);
+		return PLUGIN_HANDLED;
+	}
+	#endif
 	
 	new iTime = get_pcvar_num(g_pCvars[ROCK_DELAY]) * 60 - (floatround(get_pcvar_float(g_pCvars[TIMELIMIT]) * 60.0) - get_timeleft());
 	if(iTime > 0)
@@ -434,6 +446,10 @@ public Command_RockTheVote(id)
 public Command_Say(id)
 {
 	if(g_bVoteStarted) return;
+	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode) return;
+	#endif
 	
 	new szText[32]; read_args(szText, charsmax(szText));
 	remove_quotes(szText); trim(szText); strtolower(szText);
@@ -604,6 +620,13 @@ NominateMap(id, map[32], map_index)
 }
 public Command_MapsList(id)
 {
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode)
+	{
+		client_print_color(id, print_team_default, "%s^1 Недоступно в^4 ночном режиме^1.", PREFIX);
+		return;
+	}
+	#endif
 	Show_MapsListMenu(id, g_iPage[id] = 0);
 }
 public Show_MapsListMenu(id, iPage)
@@ -1054,6 +1077,9 @@ public Task_CheckTime()
 {
 	if(g_bVoteStarted || g_bVoteFinished) return PLUGIN_CONTINUE;
 	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bNightModeOneMap) return PLUGIN_CONTINUE;
+	#endif
 	new iTimeLeft = get_timeleft();
 	if(iTimeLeft <= get_pcvar_num(g_pCvars[START_VOTE_BEFORE_END]) * 60)
 	{
@@ -1113,7 +1139,6 @@ public Task_CheckNight()
 			if(g_bCurMapInNightMode)
 			{
 				g_fOldNightTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
-				g_bVoteStarted = true;
 				set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
 				client_print_color(0, print_team_default, "%s^1 Включен ночной режим до^3 %02d:%02d^1.", PREFIX, iEndHour, iEndMinutes);
 			}
@@ -1152,7 +1177,6 @@ public Task_CheckNight()
 	{
 		if(g_bNightModeOneMap)
 		{
-			g_bVoteStarted = false;
 			set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldNightTimeLimit);
 		}
 		client_print_color(0, print_team_default, "%s^1 Выключен^4 ночной режим^1.", PREFIX);
@@ -1163,6 +1187,13 @@ public Task_CheckNight()
 public StartVote(id)
 {
 	if(g_bVoteStarted) return 0;
+	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightModeOneMap && g_bNightMode)
+	{
+		return 0;
+	}
+	#endif
 	
 	g_bVoteStarted = true;
 	g_bStartVote = false;
