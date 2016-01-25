@@ -7,7 +7,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.18"
+#define VERSION "2.5.20"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -717,7 +717,11 @@ public client_disconnect(id)
 	}
 	#endif
 	
+	#if defined FUNCTION_NIGHTMODE
+	if(!g_bNightMode) set_task(1.0, "Task_DelayCheckChangeToDelault");
+	#else
 	set_task(1.0, "Task_DelayCheckChangeToDelault");
+	#endif
 }
 public Task_DelayCheckChangeToDelault()
 {
