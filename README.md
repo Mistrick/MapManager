@@ -5,12 +5,14 @@ Functions:
 - Nextmap
 - Rtv
 - Nomination
+- Night mode
 - Block previous maps
 
 Settings
 - FUNCTION_NEXTMAP :: replace default nextmap
 - FUNCTION_RTV :: add rtv
 - FUNCTION_NOMINATION :: add nomination
+- FUNCTION_NIGHTMODE :: add night mode
 - FUNCTION_BLOCK_MAPS :: block previous maps
 - FUNCTION_SOUND :: add sound
 - SELECT_MAPS 5 :: maps count in vote menu
@@ -29,6 +31,8 @@ Cvars:
 - mm_freeze_in_vote :: 0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
 - mm_black_screen_in_vote :: 0 - disable, 1 - enable
 - mm_last_round :: 0 - disable, 1 - enable
+- mm_change_to_default_map :: 0 - disable, 1 - enable
+- mm_default_map
 - mm_extended_map_max
 - mm_extended_time :: minutes
 - mm_rtv_mode :: 0 - percents, 1 - players
@@ -37,6 +41,4 @@ Cvars:
 - mm_rtv_change_type :: 0 - after vote, 1 - in round end
 - mm_rtv_delay :: minutes
 - mm_nomination_dont_close_menu :: 0 - disable, 1 - enable
-
-TODO:
-- Night mode
+- mm_night_time :: time to enable night mode
