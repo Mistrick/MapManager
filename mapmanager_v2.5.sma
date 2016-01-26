@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.21"
+#define VERSION "2.5.22"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -16,6 +16,7 @@
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
 //#define FUNCTION_NIGHTMODE
+#define FUNCTION_NIGHTMODE_BLOCK_CMDS
 #define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
 
@@ -166,6 +167,13 @@ new g_bNightMode;
 new g_bNightModeOneMap;
 new g_bCurMapInNightMode;
 new Float:g_fOldNightTimeLimit;
+
+#if defined FUNCTION_NIGHTMODE_BLOCK_CMDS
+new g_szBlockedCmds[][] = 
+{
+	"amx_map", "amx_votemap", "amx_mapmenu", "amx_votemapmenu"
+};
+#endif
 #endif
 
 public plugin_init()
@@ -228,6 +236,7 @@ public plugin_init()
 	register_concmd("mm_stopvote", "Command_StopVote", ADMIN_MAP);
 	register_clcmd("say timeleft", "Command_Timeleft");
 	register_clcmd("say thetime", "Command_TheTime");
+	register_clcmd("votemap", "Command_Votemap");
 	
 	#if defined FUNCTION_NEXTMAP
 	register_clcmd("say nextmap", "Command_Nextmap");
@@ -244,6 +253,13 @@ public plugin_init()
 	register_clcmd("say_team", "Command_Say");
 	register_clcmd("say maps", "Command_MapsList");
 	register_clcmd("say /maps", "Command_MapsList");
+	#endif
+	
+	#if defined FUNCTION_NIGHTMODE && defined FUNCTION_NIGHTMODE_BLOCK_CMDS
+	for(new i; i < sizeof(g_szBlockedCmds); i++)
+	{
+		register_clcmd(g_szBlockedCmds[i], "Command_BlockedCmds");
+	}
 	#endif
 	
 	register_menucmd(register_menuid("VoteMenu"), 1023, "VoteMenu_Handler");
@@ -270,6 +286,16 @@ public Native_IsNightMode()
 }
 #endif
 
+#if defined FUNCTION_NIGHTMODE && defined FUNCTION_NIGHTMODE_BLOCK_CMDS
+public Command_BlockedCmds(id)
+{
+	return g_bNightMode ? PLUGIN_HANDLED : PLUGIN_CONTINUE;
+}
+#endif
+public Command_Votemap(id)
+{
+	return PLUGIN_HANDLED;
+}
 public Commang_Debug(id)
 {
 	console_print(id, "^nLoaded maps:");	
@@ -295,6 +321,14 @@ public Commang_Debug(id)
 public Command_StartVote(id, flag)
 {
 	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
+	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bNightModeOneMap)
+	{
+		console_print(id, "Недоступно в ночном режиме!");
+		return PLUGIN_HANDLED;
+	}
+	#endif
 	
 	if(get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]) == 0)
 	{
