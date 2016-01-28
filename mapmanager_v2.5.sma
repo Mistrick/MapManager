@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.25"
+#define VERSION "2.5.26"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -1485,10 +1485,14 @@ public VoteMenu(id)
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
 	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
+	#if defined FUNCTION_RTV
+	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#else
 	#if defined FUNCTION_NIGHTMODE
 	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
 	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#endif
 	#endif
 	#endif
 	{
