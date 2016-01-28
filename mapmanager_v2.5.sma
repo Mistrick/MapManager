@@ -1871,7 +1871,7 @@ stock Intermission()
 	emessage_begin(MSG_ALL, SVC_INTERMISSION);
 	emessage_end();
 }
-stock SetBlackScreenFade(fade)
+public SetBlackScreenFade(fade)
 {
 	new time, hold, flags;
 	static iMsgScreenFade; 
