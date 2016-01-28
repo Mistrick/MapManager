@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.22"
+#define VERSION "2.5.23"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -134,6 +134,9 @@ new g_iExtendedMax;
 new g_bStartVote;
 new Float:g_fOldFreezeTime;
 new Float:g_fOldTimeLimit;
+new g_iForwardPreStartVote;
+new g_iForwardStartVote;
+new g_iForwardFinishVote;
 
 #if defined FUNCTION_SOUND
 new const g_szSound[][] =
@@ -152,7 +155,6 @@ new g_bRockVote;
 #if defined FUNCTION_NOMINATION
 new Array:g_aNominatedMaps;
 new g_iNominatedMaps[33];
-new g_iPage[33];
 new Array:g_aMapPrefixes;
 new g_iMapPrefixesNum;
 #endif
@@ -262,13 +264,14 @@ public plugin_init()
 	}
 	#endif
 	
+	g_iForwardPreStartVote = CreateMultiForward("mapmanager_prestartvote", ET_IGNORE);
+	g_iForwardStartVote = CreateMultiForward("mapmanager_startvote", ET_IGNORE);
+	g_iForwardFinishVote = CreateMultiForward("mapmanager_finishvote", ET_IGNORE);
+	
 	register_menucmd(register_menuid("VoteMenu"), 1023, "VoteMenu_Handler");
 	
-	#if defined FUNCTION_NOMINATION
-	register_menucmd(register_menuid("MapsListMenu"), 1023, "MapsListMenu_Handler");
-	#endif
-	
 	set_task(10.0, "Task_CheckTime", TASK_CHECKTIME, .flags = "b");
+	set_task(60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
 	
 	#if defined FUNCTION_NIGHTMODE
 	set_task(60.0, "Task_CheckNight", TASK_CHECKNIGHT, .flags = "b");
@@ -289,7 +292,12 @@ public Native_IsNightMode()
 #if defined FUNCTION_NIGHTMODE && defined FUNCTION_NIGHTMODE_BLOCK_CMDS
 public Command_BlockedCmds(id)
 {
-	return g_bNightMode ? PLUGIN_HANDLED : PLUGIN_CONTINUE;
+	if(g_bNightMode)
+	{
+		console_print(id, "Команда недоступна в ночном режиме!");
+		return PLUGIN_HANDLED;
+	}
+	return PLUGIN_CONTINUE;
 }
 #endif
 public Command_Votemap(id)
@@ -661,92 +669,83 @@ public Command_MapsList(id)
 		return;
 	}
 	#endif
-	Show_MapsListMenu(id, g_iPage[id] = 0);
+	Show_MapsListMenu(id);
 }
-public Show_MapsListMenu(id, iPage)
+Show_MapsListMenu(id)
 {
-	if(iPage < 0) return PLUGIN_HANDLED;
+	new iMenu = menu_create("Список карт", "MapsListMenu_Handler");
 	
-	new iMax = ArraySize(g_aMaps);
-	new i = min(iPage * 8, iMax);
-	new iStart = i - (i % 8);
-	new iEnd = min(iStart + 8, iMax);
+	new eMapInfo[MAP_INFO], szString[48], szNum[8], iSize = ArraySize(g_aMaps);
 	
-	iPage = iStart / 8;
-	g_iPage[id] = iPage;
-	
-	static szMenu[512],	iLen, eMapInfo[MAP_INFO]; iLen = 0;
-	
-	iLen = formatex(szMenu, charsmax(szMenu), "\yСписок карт \w[%d/%d]:^n", iPage + 1, ((iMax - 1) / 8) + 1);
-	
-	new Keys, Item, iNominated;
-
-	for (i = iStart; i < iEnd; i++)
+	for(new i, nominate_index; i < iSize; i++)
 	{
 		ArrayGetArray(g_aMaps, i, eMapInfo);
-	
-		iNominated = is_map_nominated(i);
+		num_to_str(i, szNum, charsmax(szNum));
+		nominate_index = is_map_nominated(i);
 		
 		if(eMapInfo[m_BlockCount])
 		{
-			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\d%d. %s[\r%d\d]", ++Item, eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
+			formatex(szString, charsmax(szString), "%s[\r%d\d]", eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
+			menu_additem(iMenu, szString, szNum, (1 << 31));
 		}
-		else if(iNominated)
+		else if(nominate_index)
 		{
-			new eNomInfo[NOMINATEDMAP_INFO]; ArrayGetArray(g_aNominatedMaps, iNominated - 1, eNomInfo);
+			new eNomInfo[NOMINATEDMAP_INFO]; ArrayGetArray(g_aNominatedMaps, nominate_index - 1, eNomInfo);
 			if(id == eNomInfo[n_Player])
 			{
-				Keys |= (1 << Item);
-				iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\w %s[\y*\w]", ++Item, eMapInfo[m_MapName]);
-				
+				formatex(szString, charsmax(szString), "%s[\y*\w]", eMapInfo[m_MapName]);
+				menu_additem(iMenu, szString, szNum);
 			}
 			else
 			{
-				iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\d %s[\y*\d]", ++Item, eMapInfo[m_MapName]);
+				formatex(szString, charsmax(szString), "%s[\y*\d]", eMapInfo[m_MapName]);
+				menu_additem(iMenu, szString, szNum, (1 << 31));
 			}
 		}
 		else
 		{
-			Keys |= (1 << Item);
-			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\w %s", ++Item, eMapInfo[m_MapName]);
+			menu_additem(iMenu, eMapInfo[m_MapName], szNum);
 		}
 	}
-	while(Item <= 8)
+	menu_setprop(iMenu, MPROP_BACKNAME, "Назад");
+	menu_setprop(iMenu, MPROP_NEXTNAME, "Далее");
+	menu_setprop(iMenu, MPROP_EXITNAME, "Выход");
+	
+	menu_display(id, iMenu);
+}
+public MapsListMenu_Handler(id, menu, item)
+{
+	if(item == MENU_EXIT)
 	{
-		Item++;
-		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n");
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
 	}
-	if (iEnd < iMax)
+	
+	new szData[8], szName[32], iAccess, iCallback;
+	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
+	
+	new map_index = str_to_num(szData);
+	trim_bracket(szName);
+	new is_map_nominated = NominateMap(id, szName, map_index);
+	
+	if(g_iNominatedMaps[id] < NOMINATED_MAPS_PER_PLAYER || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
 	{
-		Keys |= (1 << 8)|(1 << 9);		
-		formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r9.\w Вперед^n\r0.\w %s", iPage ? "Назад" : "Выход");
+		if(is_map_nominated == 1)
+		{
+			new szString[48]; formatex(szString, charsmax(szString), "%s[\y*\w]", szName);
+			menu_item_setname(menu, item, szString);
+		}
+		else if(is_map_nominated == 2)
+		{
+			menu_item_setname(menu, item, szName);
+		}
+		menu_display(id, menu, map_index / 7);
 	}
 	else
 	{
-		Keys |= (1 << 9);
-		formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n^n\r0.\w %s", iPage ? "Назад" : "Выход");
+		menu_destroy(menu);
 	}
-	show_menu(id, Keys, szMenu, -1, "MapsListMenu");
-	return PLUGIN_HANDLED;
-}
-public MapsListMenu_Handler(id, key)
-{
-	switch (key)
-	{
-		case 8: Show_MapsListMenu(id, ++g_iPage[id]);
-		case 9: Show_MapsListMenu(id, --g_iPage[id]);
-		default:
-		{
-			new map_index = key + g_iPage[id] * 8;
-			new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
-			new szMapName[32]; formatex(szMapName, charsmax(szMapName), eMapInfo[m_MapName]);
-			NominateMap(id, szMapName, map_index);
-			if(g_iNominatedMaps[id] < NOMINATED_MAPS_PER_PLAYER || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
-			{
-				Show_MapsListMenu(id, g_iPage[id]);
-			}
-		}
-	}
+	
 	return PLUGIN_HANDLED;
 }
 #endif
@@ -792,7 +791,8 @@ public Task_ChangeToDefault()
 {
 	new szMapName[32]; get_pcvar_string(g_pCvars[DEFAULT_MAP], szMapName, charsmax(szMapName));
 	if(get_players_num() == 0 && is_map_valid(szMapName) && !equali(szMapName, g_szCurrentMap))
-	{		
+	{
+		log_amx("Map changed to default[%s]", szMapName);
 		set_pcvar_string(g_pCvars[NEXTMAP], szMapName);
 		Intermission();
 	}
@@ -1281,6 +1281,18 @@ public StartVote(id)
 	
 	#if defined FUNCTION_NOMINATION
 	new eNomInfo[NOMINATEDMAP_INFO];
+	for(new i; i < ArraySize(g_aNominatedMaps); i++)
+	{
+		ArrayGetArray(g_aNominatedMaps, i, eNomInfo);
+		ArrayGetArray(g_aMaps, eNomInfo[n_MapIndex], eMapInfo);
+		
+		if(iPlayersNum > eMapInfo[m_MaxPlayers] || iPlayersNum < eMapInfo[m_MinPlayers])
+		{
+			ArrayDeleteItem(g_aNominatedMaps, i);
+			i--;
+		}
+	}
+	
 	new iNomSize = ArraySize(g_aNominatedMaps);	
 	g_iMenuItemsCount = min(min(iNomSize, NOMINATED_MAPS_IN_VOTE), iMaxItems);
 	
@@ -1366,6 +1378,9 @@ ForwardPreStartVote()
 	#else
 	ShowVoteMenu();
 	#endif
+	
+	new iRet;
+	ExecuteForward(g_iForwardPreStartVote, iRet);
 }
 public ShowTimer()
 {
@@ -1416,6 +1431,8 @@ ShowVoteMenu()
 		VoteMenu(iPlayer + TASK_VOTEMENU);
 		set_task(1.0, "VoteMenu", iPlayer + TASK_VOTEMENU, _, _, "a", VOTE_TIME);
 	}
+	new iRet;
+	ExecuteForward(g_iForwardStartVote, iRet);
 }
 public Task_Timer()
 {
@@ -1617,6 +1634,9 @@ FinishVote()
 		client_print_color(0, print_team_default, "^4%s^1 Текущая карта продлена на^3 %d^1 %s.", PREFIX, iMin, szMin);
 		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(iMin));
 	}
+	
+	new iRet;
+	ExecuteForward(g_iForwardFinishVote, iRet);
 }
 ///**************************///
 stock get_players_num()
@@ -1842,7 +1862,7 @@ stock Intermission()
 	emessage_begin(MSG_ALL, SVC_INTERMISSION);
 	emessage_end();
 }
-public SetBlackScreenFade(fade)
+stock SetBlackScreenFade(fade)
 {
 	new time, hold, flags;
 	static iMsgScreenFade; 
