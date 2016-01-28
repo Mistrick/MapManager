@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.23"
+#define VERSION "2.5.25"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -271,7 +271,6 @@ public plugin_init()
 	register_menucmd(register_menuid("VoteMenu"), 1023, "VoteMenu_Handler");
 	
 	set_task(10.0, "Task_CheckTime", TASK_CHECKTIME, .flags = "b");
-	set_task(60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
 	
 	#if defined FUNCTION_NIGHTMODE
 	set_task(60.0, "Task_CheckNight", TASK_CHECKNIGHT, .flags = "b");
@@ -843,6 +842,12 @@ public plugin_cfg()
 	#if defined FUNCTION_NIGHTMODE
 	LoadNightMaps();
 	#endif
+	
+	new Float:fChangeTime = get_pcvar_float(g_pCvars[CHANGE_TO_DEDAULT]);
+	if(fChangeTime > 0.0)
+	{
+		set_task(fChangeTime * 60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
+	}
 }
 LoadMapsFromFile()
 {
