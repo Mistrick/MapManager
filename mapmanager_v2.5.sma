@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.26"
+#define VERSION "2.5.28"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -97,6 +97,7 @@ enum _:CVARS
 #endif
 #if defined FUNCTION_NOMINATION
 	NOMINATION_DONT_CLOSE_MENU,
+	NOMINATION_DELETE_NON_CUR_ONLINE,
 #endif
 #if defined FUNCTION_NIGHTMODE
 	NIGHTMODE_TIME,
@@ -209,6 +210,7 @@ public plugin_init()
 	
 	#if defined FUNCTION_NOMINATION
 	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mm_nomination_dont_close_menu", "0");//0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DELETE_NON_CUR_ONLINE] = register_cvar("mm_nomination_delete_non_cur_online", "0");//0 - disable, 1 - enable
 	#endif
 	
 	#if defined FUNCTION_NIGHTMODE
@@ -419,7 +421,7 @@ public Command_CurrentMap(id)
 #if defined FUNCTION_RTV
 public Command_RockTheVote(id)
 {
-	if(g_bVoteFinished || g_bVoteStarted) return PLUGIN_HANDLED;
+	if(g_bVoteFinished || g_bVoteStarted || g_bStartVote) return PLUGIN_HANDLED;
 	
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode && g_bNightModeOneMap)
@@ -1286,15 +1288,18 @@ public StartVote(id)
 	
 	#if defined FUNCTION_NOMINATION
 	new eNomInfo[NOMINATEDMAP_INFO];
-	for(new i; i < ArraySize(g_aNominatedMaps); i++)
+	
+	if(get_pcvar_num(g_pCvars[NOMINATION_DELETE_NON_CUR_ONLINE]))
 	{
-		ArrayGetArray(g_aNominatedMaps, i, eNomInfo);
-		ArrayGetArray(g_aMaps, eNomInfo[n_MapIndex], eMapInfo);
-		
-		if(iPlayersNum > eMapInfo[m_MaxPlayers] || iPlayersNum < eMapInfo[m_MinPlayers])
+		for(new i; i < ArraySize(g_aNominatedMaps); i++)
 		{
-			ArrayDeleteItem(g_aNominatedMaps, i);
-			i--;
+			ArrayGetArray(g_aNominatedMaps, i, eNomInfo);
+			ArrayGetArray(g_aMaps, eNomInfo[n_MapIndex], eMapInfo);
+			
+			if(iPlayersNum > eMapInfo[m_MaxPlayers] || iPlayersNum < eMapInfo[m_MinPlayers])
+			{
+				ArrayDeleteItem(g_aNominatedMaps, i--);
+			}
 		}
 	}
 	
