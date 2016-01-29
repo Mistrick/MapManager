@@ -97,7 +97,7 @@ enum _:CVARS
 #endif
 #if defined FUNCTION_NOMINATION
 	NOMINATION_DONT_CLOSE_MENU,
-	NOMINATION_DELETE_NON_CUR_ONLINE,
+	NOMINATION_DEL_NON_CUR_ONLINE,
 #endif
 #if defined FUNCTION_NIGHTMODE
 	NIGHTMODE_TIME,
@@ -210,7 +210,7 @@ public plugin_init()
 	
 	#if defined FUNCTION_NOMINATION
 	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mm_nomination_dont_close_menu", "0");//0 - disable, 1 - enable
-	g_pCvars[NOMINATION_DELETE_NON_CUR_ONLINE] = register_cvar("mm_nomination_delete_non_cur_online", "0");//0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE] = register_cvar("mm_nomination_del_noncur_online", "0");//0 - disable, 1 - enable
 	#endif
 	
 	#if defined FUNCTION_NIGHTMODE
@@ -1289,7 +1289,7 @@ public StartVote(id)
 	#if defined FUNCTION_NOMINATION
 	new eNomInfo[NOMINATEDMAP_INFO];
 	
-	if(get_pcvar_num(g_pCvars[NOMINATION_DELETE_NON_CUR_ONLINE]))
+	if(get_pcvar_num(g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE]))
 	{
 		for(new i; i < ArraySize(g_aNominatedMaps); i++)
 		{
