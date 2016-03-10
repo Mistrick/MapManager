@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.28"
+#define VERSION "2.5.29"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -107,7 +107,8 @@ enum _:CVARS
 	TIMELIMIT,
 	FREEZETIME,
 	CHATTIME,
-	NEXTMAP
+	NEXTMAP,
+	ROUNDTIME
 };
 
 new const FILE_MAPS[] = "maps.ini";//configdir
@@ -221,6 +222,7 @@ public plugin_init()
 	g_pCvars[WINLIMIT] = get_cvar_pointer("mp_winlimit");
 	g_pCvars[TIMELIMIT] = get_cvar_pointer("mp_timelimit");
 	g_pCvars[FREEZETIME] = get_cvar_pointer("mp_freezetime");
+	g_pCvars[ROUNDTIME] = get_cvar_pointer("mp_roundtime");
 	
 	g_pCvars[NEXTMAP] = register_cvar("amx_nextmap", "", FCVAR_SERVER|FCVAR_EXTDLL|FCVAR_SPONLY);
 	
@@ -807,6 +809,10 @@ public plugin_end()
 	}
 	#endif
 	
+	if(g_fOldFreezeTime > 0.0)
+	{
+		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
+	}
 	if(g_fOldTimeLimit > 0.0)
 	{
 		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
@@ -1121,8 +1127,17 @@ public Task_CheckTime()
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode && g_bNightModeOneMap) return PLUGIN_CONTINUE;
 	#endif
+	
+	new Float:fRoundTime = get_pcvar_float(g_pCvars[ROUNDTIME]);
+	new Float:fTimeToVote = get_pcvar_float(g_pCvars[START_VOTE_BEFORE_END]);
+	
+	if(fRoundTime > fTimeToVote)
+	{
+		set_pcvar_float(g_pCvars[START_VOTE_BEFORE_END], (fTimeToVote = fRoundTime + 1.0));
+	}
+	
 	new iTimeLeft = get_timeleft();
-	if(iTimeLeft <= get_pcvar_num(g_pCvars[START_VOTE_BEFORE_END]) * 60)
+	if(iTimeLeft <= floatround(fTimeToVote * 60.0))
 	{
 		if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
 		{
@@ -1584,6 +1599,7 @@ FinishVote()
 	if(get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]))
 	{
 		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
+		g_fOldFreezeTime = 0.0;
 	}
 	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
 	{
