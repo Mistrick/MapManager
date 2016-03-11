@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.29"
+#define VERSION "2.5.31"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -309,6 +309,8 @@ public Command_Votemap(id)
 }
 public Commang_Debug(id)
 {
+	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
+	
 	console_print(id, "^nLoaded maps:");	
 	new eMapInfo[MAP_INFO], iSize = ArraySize(g_aMaps);
 	for(new i; i < iSize; i++)
