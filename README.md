@@ -11,7 +11,7 @@ MapManager is an [AMX Mod X](/alliedmodders/amxmodx) Plugin to vote for the next
 ### Defines
 You may comment some of these to disable functionality you don't need. Less functionality - better perfomance.
 ```c
-#define FUNCTION_NEXTMAP            // replace default nextmap command
+#define FUNCTION_NEXTMAP            // replace default nextmap plugin
 #define FUNCTION_RTV                // support rtv
 #define FUNCTION_NOMINATION         // support nomination
 #define FUNCTION_NIGHTMODE          // support night mode
