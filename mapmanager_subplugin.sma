@@ -17,8 +17,8 @@ public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
 	DisableHamForward(g_iHamSpawn = RegisterHam(Ham_Spawn, "player", "Ham_PlayerSpawn_Post", 1));
-	g_pFreezeInVote = get_cvar_pointer("mm_freeze_in_vote");
-	g_pStartVoteInNewRound = get_cvar_pointer("mm_start_vote_in_new_round");
+	g_pFreezeInVote = get_cvar_pointer("mapm_freeze_in_vote");
+	g_pStartVoteInNewRound = get_cvar_pointer("mapm_start_vote_in_new_round");
 }
 public mapmanager_prestartvote()
 {
