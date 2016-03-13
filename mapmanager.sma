@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.31"
+#define VERSION "2.5.37"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -184,38 +184,38 @@ public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
 	
-	register_cvar("mm_version", VERSION, FCVAR_SERVER | FCVAR_SPONLY);
+	register_cvar("mapm_version", VERSION, FCVAR_SERVER | FCVAR_SPONLY);
 	
-	g_pCvars[CHANGE_TYPE] = register_cvar("mm_change_type", "2");//0 - after end vote, 1 - in round end, 2 - after end map
-	g_pCvars[START_VOTE_BEFORE_END] = register_cvar("mm_start_vote_before_end", "2");//minutes
-	g_pCvars[SHOW_RESULT_TYPE] = register_cvar("mm_show_result_type", "1");//0 - disable, 1 - menu, 2 - hud
-	g_pCvars[SHOW_SELECTS] = register_cvar("mm_show_selects", "1");//0 - disable, 1 - all
-	g_pCvars[START_VOTE_IN_NEW_ROUND] = register_cvar("mm_start_vote_in_new_round", "0");//0 - disable, 1 - enable
-	g_pCvars[FREEZE_IN_VOTE] = register_cvar("mm_freeze_in_vote", "0");//0 - disable, 1 - enable, if mm_start_vote_in_new_round 1
-	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mm_black_screen_in_vote", "0");//0 - disable, 1 - enable
-	g_pCvars[LAST_ROUND] = register_cvar("mm_last_round", "0");//0 - disable, 1 - enable
+	g_pCvars[CHANGE_TYPE] = register_cvar("mapm_change_type", "2");//0 - after end vote, 1 - in round end, 2 - after end map
+	g_pCvars[START_VOTE_BEFORE_END] = register_cvar("mapm_start_vote_before_end", "2");//minutes
+	g_pCvars[SHOW_RESULT_TYPE] = register_cvar("mapm_show_result_type", "1");//0 - disable, 1 - menu, 2 - hud
+	g_pCvars[SHOW_SELECTS] = register_cvar("mapm_show_selects", "1");//0 - disable, 1 - all
+	g_pCvars[START_VOTE_IN_NEW_ROUND] = register_cvar("mapm_start_vote_in_new_round", "0");//0 - disable, 1 - enable
+	g_pCvars[FREEZE_IN_VOTE] = register_cvar("mapm_freeze_in_vote", "0");//0 - disable, 1 - enable, if mapm_start_vote_in_new_round 1
+	g_pCvars[BLACK_SCREEN_IN_VOTE] = register_cvar("mapm_black_screen_in_vote", "0");//0 - disable, 1 - enable
+	g_pCvars[LAST_ROUND] = register_cvar("mapm_last_round", "0");//0 - disable, 1 - enable
 	
-	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mm_change_to_default_map", "0");//minutes, 0 - disable
-	g_pCvars[DEFAULT_MAP] = register_cvar("mm_default_map", "de_dust2");
+	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mapm_change_to_default_map", "0");//minutes, 0 - disable
+	g_pCvars[DEFAULT_MAP] = register_cvar("mapm_default_map", "de_dust2");
 	
-	g_pCvars[EXENDED_MAX] = register_cvar("mm_extended_map_max", "3");
-	g_pCvars[EXENDED_TIME] = register_cvar("mm_extended_time", "15");//minutes
+	g_pCvars[EXENDED_MAX] = register_cvar("mapm_extended_map_max", "3");
+	g_pCvars[EXENDED_TIME] = register_cvar("mapm_extended_time", "15");//minutes
 	
 	#if defined FUNCTION_RTV
-	g_pCvars[ROCK_MODE] = register_cvar("mm_rtv_mode", "0");//0 - percents, 1 - players
-	g_pCvars[ROCK_PERCENT] = register_cvar("mm_rtv_percent", "60");
-	g_pCvars[ROCK_PLAYERS] = register_cvar("mm_rtv_players", "5");
-	g_pCvars[ROCK_CHANGE_TYPE] = register_cvar("mm_rtv_change_type", "1");//0 - after vote, 1 - in round end
-	g_pCvars[ROCK_DELAY] = register_cvar("mm_rtv_delay", "0");//minutes
+	g_pCvars[ROCK_MODE] = register_cvar("mapm_rtv_mode", "0");//0 - percents, 1 - players
+	g_pCvars[ROCK_PERCENT] = register_cvar("mapm_rtv_percent", "60");
+	g_pCvars[ROCK_PLAYERS] = register_cvar("mapm_rtv_players", "5");
+	g_pCvars[ROCK_CHANGE_TYPE] = register_cvar("mapm_rtv_change_type", "1");//0 - after vote, 1 - in round end
+	g_pCvars[ROCK_DELAY] = register_cvar("mapm_rtv_delay", "0");//minutes
 	#endif
 	
 	#if defined FUNCTION_NOMINATION
-	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mm_nomination_dont_close_menu", "0");//0 - disable, 1 - enable
-	g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE] = register_cvar("mm_nomination_del_noncur_online", "0");//0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mapm_nom_dont_close_menu", "0");//0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE] = register_cvar("mapm_nom_del_noncur_online", "0");//0 - disable, 1 - enable
 	#endif
 	
 	#if defined FUNCTION_NIGHTMODE
-	g_pCvars[NIGHTMODE_TIME] = register_cvar("mm_night_time", "00:00 8:00");
+	g_pCvars[NIGHTMODE_TIME] = register_cvar("mapm_night_time", "00:00 8:00");
 	#endif
 	
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
@@ -237,9 +237,9 @@ public plugin_init()
 	register_event("30", "Event_Intermisson", "a");
 	#endif
 	
-	register_concmd("mm_debug", "Commang_Debug", ADMIN_MAP);
-	register_concmd("mm_startvote", "Command_StartVote", ADMIN_MAP);
-	register_concmd("mm_stopvote", "Command_StopVote", ADMIN_MAP);
+	register_concmd("mapm_debug", "Commang_Debug", ADMIN_MAP);
+	register_concmd("mapm_startvote", "Command_StartVote", ADMIN_MAP);
+	register_concmd("mapm_stopvote", "Command_StopVote", ADMIN_MAP);
 	register_clcmd("say timeleft", "Command_Timeleft");
 	register_clcmd("say thetime", "Command_TheTime");
 	register_clcmd("votemap", "Command_Votemap");
@@ -307,7 +307,7 @@ public Command_Votemap(id)
 {
 	return PLUGIN_HANDLED;
 }
-public Commang_Debug(id)
+public Commang_Debug(id, flag)
 {
 	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
 	
@@ -350,7 +350,7 @@ public Command_StartVote(id, flag)
 	else
 	{
 		g_bStartVote = true;
-		client_print_color(0, print_team_default, "%s^1 Голосование начнется в следующем раунде.", PREFIX);
+		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_VOTE_WILL_BEGIN");
 	}
 	
 	return PLUGIN_HANDLED;
@@ -387,7 +387,7 @@ public Command_StopVote(id, flag)
 		if(id) get_user_name(id, szName, charsmax(szName));
 		else szName = "Server";
 		
-		client_print_color(0, id, "%s^3 %s^1 отменил голосование.", PREFIX, szName);
+		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_CANCEL_VOTE", szName);
 	}
 	
 	return PLUGIN_HANDLED;
@@ -397,28 +397,35 @@ public Command_Timeleft(id)
 	if (get_pcvar_num(g_pCvars[TIMELIMIT]))
 	{
 		new a = get_timeleft();
-		client_print_color(0, id, "%s^1 До конца карты осталось:^3 %d:%02d", PREFIX, (a / 60), (a % 60));
+		client_print_color(0, id, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_TIME_TO_END", (a / 60), (a % 60));
 	}
 	else
 	{
-		client_print_color(0, print_team_default, "%s^1 Карта не ограничена по времени.", PREFIX);
+		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NO_TIMELIMIT");
 	}
 }
 public Command_TheTime(id)
 {
 	new szTime[64]; get_time("%Y/%m/%d - %H:%M:%S", szTime, charsmax(szTime));
-	client_print_color(0, print_team_default, "%s^3 Текущее время^1:^4 %s^1.", PREFIX, szTime);
+	client_print_color(0, print_team_default, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_THETIME", szTime);
 }
 
 #if defined FUNCTION_NEXTMAP
 public Command_Nextmap(id)
 {
-	new szMap[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMap, charsmax(szMap));
-	client_print_color(0, id, "%s^1 Следующая карта: ^3%s^1.", PREFIX, g_bVoteFinished ? szMap : "ещё не выбрана");
+	if(g_bVoteFinished)
+	{
+		new szMap[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMap, charsmax(szMap));
+		client_print_color(0, id, "%s^1 %L ^3%s^1.", PREFIX, LANG_SERVER, "MAPM_NEXTMAP", szMap);
+	}
+	else
+	{
+		client_print_color(0, id, "%s^1 %L ^3%L^1.", PREFIX, LANG_SERVER, "MAPM_NEXTMAP", LANG_SERVER, "MAPM_NOT_SELECTED");
+	}
 }
 public Command_CurrentMap(id)
 {
-	client_print_color(0, id, "%s^1 Текущая карта:^3 %s^1.", PREFIX, g_szCurrentMap);
+	client_print_color(0, id, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_CURRENT_MAP", g_szCurrentMap);
 }
 #endif
 
@@ -430,7 +437,7 @@ public Command_RockTheVote(id)
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode && g_bNightModeOneMap)
 	{
-		client_print_color(id, print_team_default, "%s^1 Недоступно в^4 ночном режиме^1.", PREFIX);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NOT_AVAILABLE");
 		return PLUGIN_HANDLED;
 	}
 	#endif
@@ -438,7 +445,7 @@ public Command_RockTheVote(id)
 	new iTime = get_pcvar_num(g_pCvars[ROCK_DELAY]) * 60 - (floatround(get_pcvar_float(g_pCvars[TIMELIMIT]) * 60.0) - get_timeleft());
 	if(iTime > 0)
 	{
-		client_print_color(id, print_team_default, "%s^1 Вы не можете голосовать за досрочную смену карты. Осталось:^3 %d:%02d^1.", PREFIX, iTime / 60, iTime % 60);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_RTV_DELAY", iTime / 60, iTime % 60);
 		return PLUGIN_HANDLED;
 	}
 	
@@ -461,8 +468,8 @@ public Command_RockTheVote(id)
 		if(iVotes > 0)
 		{
 			new szName[33];	get_user_name(id, szName, charsmax(szName));
-			new szVote[16];	get_ending(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
-			client_print_color(0, print_team_default, "%s^3 %s^1 проголосовал за смену карты. Осталось:^3 %d^1 %s.", PREFIX, szName, iVotes, szVote);
+			new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+			client_print_color(0, print_team_default, "%s^3 %L %L.", PREFIX, LANG_SERVER, "MAPM_RTV_VOTED", szName, iVotes, LANG_SERVER, szVote);
 		}
 		else
 		{
@@ -470,19 +477,19 @@ public Command_RockTheVote(id)
 			if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
 			{
 				StartVote(0);
-				client_print_color(0, print_team_default, "%s^1 Начинаем досрочное голосование.", PREFIX);
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_RTV_START_VOTE");
 			}
 			else
 			{
 				g_bStartVote = true;
-				client_print_color(0, print_team_default, "%s^1 Голосование начнется в следующем раунде.", PREFIX);
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_START_VOTE_NEW_ROUND");
 			}
 		}
 	}
 	else
 	{
-		new szVote[16];	get_ending(iVotes, "голосов", "голос", "голоса", szVote, charsmax(szVote));
-		client_print_color(id, print_team_default, "%s^1 Вы уже голосовали. Осталось:^3 %d^1 %s.", PREFIX, iVotes, szVote);
+		new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+		client_print_color(id, print_team_default, "%s^1 %L %L.", PREFIX, LANG_SERVER, "MAPM_RTV_ALREADY_VOTED", iVotes, LANG_SERVER, szVote);
 	}
 	
 	return PLUGIN_HANDLED;
@@ -624,7 +631,7 @@ NominateMap(id, map[32], map_index)
 	new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
 	if(eMapInfo[m_BlockCount])
 	{
-		client_print_color(id, print_team_default, "%s^1 Эта карта недоступна для номинации.", PREFIX);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOM_NOT_AVAILABLE_MAP");
 		return 0;
 	}
 	#endif
@@ -641,16 +648,16 @@ NominateMap(id, map[32], map_index)
 			g_iNominatedMaps[id]--;
 			ArrayDeleteItem(g_aNominatedMaps, nominate_index - 1);
 			
-			client_print_color(0, id, "%s^3 %s^1 убрал номинацию с карты^3 %s^1.", PREFIX, szName, map);
+			client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_REMOVE_NOM", szName, map);
 			return 2;
 		}
-		client_print_color(id, print_team_default, "%s^1 Эта карта уже номинирована.", PREFIX);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOM_ALREADY_NOM");
 		return 0;
 	}
 	
 	if(g_iNominatedMaps[id] >= NOMINATED_MAPS_PER_PLAYER)
 	{
-		client_print_color(id, print_team_default, "%s^1 Вы не можете больше номинировать карты.", PREFIX);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOM_CANT_NOM");
 		return 0;
 	}
 	
@@ -661,7 +668,7 @@ NominateMap(id, map[32], map_index)
 	
 	g_iNominatedMaps[id]++;
 	
-	client_print_color(0, id, "%s^3 %s^1 номинировал на голосование^3 %s^1.", PREFIX, szName, map);
+	client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP", szName, map);
 	
 	return 1;
 }
@@ -670,7 +677,7 @@ public Command_MapsList(id)
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode)
 	{
-		client_print_color(id, print_team_default, "%s^1 Недоступно в^4 ночном режиме^1.", PREFIX);
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NOT_AVAILABLE");
 		return;
 	}
 	#endif
@@ -678,7 +685,8 @@ public Command_MapsList(id)
 }
 Show_MapsListMenu(id)
 {
-	new iMenu = menu_create("Список карт", "MapsListMenu_Handler");
+	new szText[64]; formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_MAP_LIST");
+	new iMenu = menu_create(szText, "MapsListMenu_Handler");
 	
 	new eMapInfo[MAP_INFO], szString[48], szNum[8], iSize = ArraySize(g_aMaps);
 	
@@ -712,9 +720,12 @@ Show_MapsListMenu(id)
 			menu_additem(iMenu, eMapInfo[m_MapName], szNum);
 		}
 	}
-	menu_setprop(iMenu, MPROP_BACKNAME, "Назад");
-	menu_setprop(iMenu, MPROP_NEXTNAME, "Далее");
-	menu_setprop(iMenu, MPROP_EXITNAME, "Выход");
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_BACK");
+	menu_setprop(iMenu, MPROP_BACKNAME, szText);
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_NEXT");
+	menu_setprop(iMenu, MPROP_NEXTNAME, szText);
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_EXIT");
+	menu_setprop(iMenu, MPROP_EXITNAME, szText);
 	
 	menu_display(id, iMenu);
 }
@@ -858,6 +869,8 @@ public plugin_cfg()
 	{
 		set_task(fChangeTime * 60.0, "Task_ChangeToDefault", TASK_CHANGETODEFAULT);
 	}
+	
+	register_dictionary("mapmanager.txt");
 }
 LoadMapsFromFile()
 {
@@ -1105,7 +1118,7 @@ public Event_NewRound()
 	{
 		Intermission();
 		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
-		client_print_color(0, print_team_default, "%s^1 Следующая карта:^3 %s^1.", PREFIX, szMapName);
+		client_print_color(0, print_team_default, "%s^1 %L^3 %s^1.", PREFIX, LANG_SERVER, "MAPM_NEXTMAP", szMapName);
 	}
 	
 	#if defined FUNCTION_NIGHTMODE
@@ -1113,7 +1126,7 @@ public Event_NewRound()
 	{
 		Intermission();
 		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
-		client_print_color(0, print_team_default, "%s^3 Ночной режим^1. Следующая карта:^3 %s^1.", PREFIX, szMapName);
+		client_print_color(0, print_team_default, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NEXTMAP", szMapName);
 	}
 	#endif
 }
@@ -1198,7 +1211,7 @@ public Task_CheckNight()
 			{
 				g_fOldNightTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
 				set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
-				client_print_color(0, print_team_default, "%s^1 Включен ночной режим до^3 %02d:%02d^1.", PREFIX, iEndHour, iEndMinutes);
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_ON", iEndHour, iEndMinutes);
 			}
 			else
 			{
@@ -1208,12 +1221,12 @@ public Task_CheckNight()
 				if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
 				{
 					Intermission();
-					client_print_color(0, print_team_default, "%s^1 Переход на^4 ночную карту^1:^3 %s.", PREFIX, szMapName);
+					client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_CHANGELEVEL", szMapName);
 				}
 				else
 				{
 					g_bVoteFinished = true;
-					client_print_color(0, print_team_default, "%s^1 В следующем раунде переход на^4 ночную карту^1:^3 %s.", PREFIX, szMapName);
+					client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NEXT_ROUND_CHANGE", szMapName);
 				}
 			}
 		}
@@ -1221,13 +1234,13 @@ public Task_CheckNight()
 		{
 			if(get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]) == 0)
 			{
-				client_print_color(0, print_team_default, "%s^1 Переход на^4 ночные карты^1.", PREFIX);
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_CHANGELEVEL2");
 				StartVote(0);
 			}
 			else
 			{
 				g_bStartVote = true;
-				client_print_color(0, print_team_default, "%s^1 В следующем раунде переход на^4 ночные карты^1.", PREFIX);
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NEXT_ROUND_CHANGE2");
 			}
 		}
 	}
@@ -1237,7 +1250,7 @@ public Task_CheckNight()
 		{
 			set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldNightTimeLimit);
 		}
-		client_print_color(0, print_team_default, "%s^1 Выключен^4 ночной режим^1.", PREFIX);
+		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_OFF");
 	}
 }
 #endif
@@ -1423,13 +1436,13 @@ public ShowTimer()
 		ShowVoteMenu();
 		return;
 	}
-	new szSec[16]; get_ending(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
+	new szSec[16]; get_ending(g_iTimer, "MAPM_SECOND1", "MAPM_SECOND2", "MAPM_SECOND3", szSec, charsmax(szSec));
 	new iPlayers[32], pNum; get_players(iPlayers, pNum, "ch");
 	for(new id, i; i < pNum; i++)
 	{
 		id = iPlayers[i];
 		set_hudmessage(50, 255, 50, -1.0, is_user_alive(id) ? 0.9 : 0.3, 0, 0.0, 1.0, 0.0, 0.0, 4);
-		show_hudmessage(id, "До голосования осталось %d %s!", g_iTimer, szSec);
+		show_hudmessage(id, "%L %L!", LANG_SERVER, "MAPM_HUD_TIMER", g_iTimer, LANG_SERVER, szSec);
 	}
 	
 	#if defined FUNCTION_SOUND
@@ -1483,7 +1496,7 @@ public VoteMenu(id)
 	static szMenu[512];
 	new iKeys, iPercent, i, iLen;
 	
-	iLen = formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y%s:^n^n", g_bPlayerVoted[id] ? "Результаты голосования" : "Выберите карту");
+	iLen = formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y%L:^n^n", LANG_SERVER, g_bPlayerVoted[id] ? "MAPM_MENU_VOTE_RESULTS" : "MAPM_MENU_CHOOSE_MAP");
 	
 	for(i = 0; i < g_iMenuItemsCount; i++)
 	{		
@@ -1526,17 +1539,17 @@ public VoteMenu(id)
 		
 		if(!g_bPlayerVoted[id])
 		{
-			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\w %s\d[\r%d%%\d]\y[Продлить]^n", i + 1, g_szCurrentMap, iPercent);	
+			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\r%d.\w %s\d[\r%d%%\d]\y[%L]^n", i + 1, g_szCurrentMap, iPercent, LANG_SERVER, "MAPM_MENU_EXTEND");	
 			iKeys |= (1 << i);
 		}
 		else
 		{
-			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\d%s[\r%d%%\d]\y[Продлить]^n", g_szCurrentMap, iPercent);
+			iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\d%s[\r%d%%\d]\y[%L]^n", g_szCurrentMap, iPercent, LANG_SERVER, "MAPM_MENU_EXTEND");
 		}
 	}
 	
-	new szSec[16]; get_ending(g_iTimer, "секунд", "секунда", "секунды", szSec, charsmax(szSec));
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\dОсталось \r%d\d %s", g_iTimer, szSec);
+	new szSec[16]; get_ending(g_iTimer, "MAPM_SECOND1", "MAPM_SECOND2", "MAPM_SECOND3", szSec, charsmax(szSec));
+	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\d%L \r%d\d %L", LANG_SERVER, "MAPM_MENU_LEFT", g_iTimer, LANG_SERVER, szSec);
 	
 	if(!iKeys) iKeys |= (1 << 9);
 	
@@ -1574,11 +1587,11 @@ public VoteMenu_Handler(id, key)
 		new szName[32];	get_user_name(id, szName, charsmax(szName));
 		if(key == g_iMenuItemsCount)
 		{
-			client_print_color(0, id, "^4%s^1 ^3%s^1 выбрал продление карты.", PREFIX, szName);
+			client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_CHOSE_EXTEND", szName);
 		}
 		else
 		{
-			client_print_color(0, id, "^4%s^3 %s^1 выбрал^3 %s^1.", PREFIX, szName, g_eMenuItems[key][v_MapName]);
+			client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_CHOSE_MAP", szName, g_eMenuItems[key][v_MapName]);
 		}
 	}
 	
@@ -1623,12 +1636,12 @@ FinishVote()
 	{
 		if(g_iTotalVotes)
 		{
-			client_print_color(0, print_team_default, "%s^1 Следующая карта:^3 %s^1.", PREFIX, g_eMenuItems[iMaxVote][v_MapName]);
+			client_print_color(0, print_team_default, "%s^1 %L^3 %s^1.", PREFIX, LANG_SERVER, "MAPM_NEXTMAP", g_eMenuItems[iMaxVote][v_MapName]);
 		}
 		else
 		{
 			iMaxVote = random_num(0, g_iMenuItemsCount - 1);
-			client_print_color(0, print_team_default, "%s^1 Никто не голосовал. Следуйщей будет^3 %s^1.", PREFIX, g_eMenuItems[iMaxVote][v_MapName]);
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOBODY_VOTE", g_eMenuItems[iMaxVote][v_MapName]);
 		}
 		set_pcvar_string(g_pCvars[NEXTMAP], g_eMenuItems[iMaxVote][v_MapName]);
 		
@@ -1636,7 +1649,7 @@ FinishVote()
 		{
 			g_fOldTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
 			set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
-			client_print_color(0, print_team_default, "%s^1 Это последний раунд.", PREFIX);
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_LASTROUND");
 		}
 		#if defined FUNCTION_RTV
 		else if(g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 0 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
@@ -1644,7 +1657,9 @@ FinishVote()
 		else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 0)
 		#endif
 		{
-			client_print_color(0, print_team_default, "%s^1 Карта сменится через^3 5^1 секунд.", PREFIX);
+			new iSec = get_pcvar_num(g_pCvars[CHATTIME]);
+			new szSec[16]; get_ending(iSec, "MAPM_SECOND1", "MAPM_SECOND2", "MAPM_SECOND3", szSec, charsmax(szSec));
+			client_print_color(0, print_team_default, "%s^1 %L^1 %L.", PREFIX, LANG_SERVER, "MAPM_MAP_CHANGE", iSec, LANG_SERVER, szSec);
 			Intermission();
 		}
 		#if defined FUNCTION_RTV
@@ -1653,7 +1668,7 @@ FinishVote()
 		else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1)
 		#endif
 		{
-			client_print_color(0, print_team_default, "%s^1 Карта сменится в следующем раунде.", PREFIX);
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER,"MAPM_MAP_CHANGE_NEXTROUND");
 		}
 	}
 	else
@@ -1661,9 +1676,9 @@ FinishVote()
 		g_bVoteFinished = false;
 		g_iExtendedMax++;
 		new iMin = get_pcvar_num(g_pCvars[EXENDED_TIME]);
-		new szMin[16]; get_ending(iMin, "минут", "минута", "минуты", szMin, charsmax(szMin));
+		new szMin[16]; get_ending(iMin, "MAPM_MINUTE1", "MAPM_MINUTE2", "MAPM_MINUTE3", szMin, charsmax(szMin));
 		
-		client_print_color(0, print_team_default, "^4%s^1 Текущая карта продлена на^3 %d^1 %s.", PREFIX, iMin, szMin);
+		client_print_color(0, print_team_default, "%s^1 %L %L.", PREFIX, LANG_SERVER, "MAPM_MAP_EXTEND", iMin, LANG_SERVER, szMin);
 		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(iMin));
 	}
 	
