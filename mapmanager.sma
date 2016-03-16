@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.37"
+#define VERSION "2.5.39"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -28,6 +28,8 @@
 #define NOMINATED_MAPS_PER_PLAYER 3
 
 #define BLOCK_MAP_COUNT 5
+
+#define MAX_ROUND_TIME 3.5
 
 new const PREFIX[] = "^4[MapManager]";
 
@@ -1143,10 +1145,12 @@ public Task_CheckTime()
 	if(g_bNightMode && g_bNightModeOneMap) return PLUGIN_CONTINUE;
 	#endif
 	
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) <= 0.0) return PLUGIN_CONTINUE;
+	
 	new Float:fRoundTime = get_pcvar_float(g_pCvars[ROUNDTIME]);
 	new Float:fTimeToVote = get_pcvar_float(g_pCvars[START_VOTE_BEFORE_END]);
 	
-	if(fRoundTime > fTimeToVote)
+	if(fRoundTime > fTimeToVote && fRoundTime < MAX_ROUND_TIME)
 	{
 		set_pcvar_float(g_pCvars[START_VOTE_BEFORE_END], (fTimeToVote = fRoundTime + 1.0));
 	}
@@ -1518,15 +1522,15 @@ public VoteMenu(id)
 	}
 	
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
-	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
 	#if defined FUNCTION_RTV
-	if(!g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
 	#else
 	#if defined FUNCTION_NIGHTMODE
-	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
-	if(g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
 	#endif
 	#endif
 	#endif
