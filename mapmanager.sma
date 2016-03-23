@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.39"
+#define VERSION "2.5.40"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -136,7 +136,7 @@ new g_iTimer;
 new g_bPlayerVoted[33];
 new g_iExtendedMax;
 new g_bStartVote;
-new Float:g_fOldFreezeTime;
+new Float:g_fOldFreezeTime = -1.0;
 new Float:g_fOldTimeLimit;
 new g_iForwardPreStartVote;
 new g_iForwardStartVote;
@@ -824,7 +824,7 @@ public plugin_end()
 	}
 	#endif
 	
-	if(g_fOldFreezeTime > 0.0)
+	if(g_fOldFreezeTime >= 0.0)
 	{
 		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
 	}
@@ -1618,7 +1618,7 @@ FinishVote()
 	if(get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]))
 	{
 		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
-		g_fOldFreezeTime = 0.0;
+		g_fOldFreezeTime = -1.0;
 	}
 	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
 	{
