@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.40"
+#define VERSION "2.5.42"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -670,7 +670,14 @@ NominateMap(id, map[32], map_index)
 	
 	g_iNominatedMaps[id]++;
 	
-	client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP", szName, map);
+	if(get_pcvar_num(g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE]))
+	{
+		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP2", szName, map, eMapInfo[m_MinPlayers], eMapInfo[m_MaxPlayers]);
+	}
+	else
+	{
+		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP", szName, map);
+	}
 	
 	return 1;
 }
