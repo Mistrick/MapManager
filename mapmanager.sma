@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.42"
+#define VERSION "2.5.43"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -135,8 +135,9 @@ new g_iTotalVotes;
 new g_iTimer;
 new g_bPlayerVoted[33];
 new g_iExtendedMax;
+new g_bExtendMap;
 new g_bStartVote;
-new Float:g_fOldFreezeTime = -1.0;
+new g_bChangedFreezeTime;
 new Float:g_fOldTimeLimit;
 new g_iForwardPreStartVote;
 new g_iForwardStartVote;
@@ -299,7 +300,7 @@ public Command_BlockedCmds(id)
 {
 	if(g_bNightMode)
 	{
-		console_print(id, "Команда недоступна в ночном режиме!");
+		console_print(id, "%L", LANG_SERVER, "MAPM_NIGHT_BLOCK_CMD");
 		return PLUGIN_HANDLED;
 	}
 	return PLUGIN_CONTINUE;
@@ -340,7 +341,7 @@ public Command_StartVote(id, flag)
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode && g_bNightModeOneMap)
 	{
-		console_print(id, "Недоступно в ночном режиме!");
+		console_print(id, "%L", LANG_SERVER, "MAPM_NIGHT_BLOCK_CMD");
 		return PLUGIN_HANDLED;
 	}
 	#endif
@@ -550,16 +551,16 @@ public Command_Say(id)
 }
 public Show_NominationList(id, Array: array, size)
 {
-	new iMenu = menu_create("Найдено несколько карт:", "NominationList_Handler");
+	new szText[64]; formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_FAST_NOM");
+	new iMenu = menu_create(szText, "NominationList_Handler");
 	new eMapInfo[MAP_INFO], szString[64], map_index, nominate_index;
 	
-	for(new i, szNum[8]; i < size; i++)
+	for(new i, szNum[2]; i < size; i++)
 	{
 		map_index = ArrayGetCell(array, i);
 		ArrayGetArray(g_aMaps, map_index, eMapInfo);
 		
-		num_to_str(map_index, szNum, charsmax(szNum));
-		
+		szNum[0] = map_index;
 		nominate_index = is_map_nominated(map_index);
 		
 		if(eMapInfo[m_BlockCount])
@@ -586,9 +587,13 @@ public Show_NominationList(id, Array: array, size)
 			menu_additem(iMenu, eMapInfo[m_MapName], szNum);
 		}
 	}
-	menu_setprop(iMenu, MPROP_BACKNAME, "Назад");
-	menu_setprop(iMenu, MPROP_NEXTNAME, "Далее");
-	menu_setprop(iMenu, MPROP_EXITNAME, "Выход");
+	
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_BACK");
+	menu_setprop(iMenu, MPROP_BACKNAME, szText);
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_NEXT");
+	menu_setprop(iMenu, MPROP_NEXTNAME, szText);
+	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_EXIT");
+	menu_setprop(iMenu, MPROP_EXITNAME, szText);
 	
 	menu_display(id, iMenu);
 }
@@ -600,10 +605,10 @@ public NominationList_Handler(id, menu, item)
 		return PLUGIN_HANDLED;
 	}
 	
-	new szData[8], szName[32], iAccess, iCallback;
+	new szData[2], szName[32], iAccess, iCallback;
 	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
 	
-	new map_index = str_to_num(szData);
+	new map_index = szData[0];
 	trim_bracket(szName);
 	new is_map_nominated = NominateMap(id, szName, map_index);
 	
@@ -672,7 +677,8 @@ NominateMap(id, map[32], map_index)
 	
 	if(get_pcvar_num(g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE]))
 	{
-		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP2", szName, map, eMapInfo[m_MinPlayers], eMapInfo[m_MaxPlayers]);
+		new iMinPlayers = eMapInfo[m_MinPlayers] == 0 ? 1 : eMapInfo[m_MinPlayers];
+		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_MAP2", szName, map, iMinPlayers, eMapInfo[m_MaxPlayers]);
 	}
 	else
 	{
@@ -697,12 +703,12 @@ Show_MapsListMenu(id)
 	new szText[64]; formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_MAP_LIST");
 	new iMenu = menu_create(szText, "MapsListMenu_Handler");
 	
-	new eMapInfo[MAP_INFO], szString[48], szNum[8], iSize = ArraySize(g_aMaps);
+	new eMapInfo[MAP_INFO], szString[48], iSize = ArraySize(g_aMaps);
 	
-	for(new i, nominate_index; i < iSize; i++)
+	for(new i, nominate_index, szNum[2]; i < iSize; i++)
 	{
 		ArrayGetArray(g_aMaps, i, eMapInfo);
-		num_to_str(i, szNum, charsmax(szNum));
+		szNum[0] = i;
 		nominate_index = is_map_nominated(i);
 		
 		if(eMapInfo[m_BlockCount])
@@ -746,10 +752,10 @@ public MapsListMenu_Handler(id, menu, item)
 		return PLUGIN_HANDLED;
 	}
 	
-	new szData[8], szName[32], iAccess, iCallback;
+	new szData[2], szName[32], iAccess, iCallback;
 	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
 	
-	new map_index = str_to_num(szData);
+	new map_index = szData[0];
 	trim_bracket(szName);
 	new is_map_nominated = NominateMap(id, szName, map_index);
 	
@@ -799,12 +805,12 @@ public client_disconnect(id)
 	#endif
 	
 	#if defined FUNCTION_NIGHTMODE
-	if(!g_bNightMode) set_task(1.0, "Task_DelayCheckChangeToDelault");
+	if(!g_bNightMode) set_task(1.0, "Task_DelayedChangeToDelault");
 	#else
-	set_task(1.0, "Task_DelayCheckChangeToDelault");
+	set_task(1.0, "Task_DelayedChangeToDelault");
 	#endif
 }
-public Task_DelayCheckChangeToDelault()
+public Task_DelayedChangeToDelault()
 {
 	new Float:fChangeTime = get_pcvar_float(g_pCvars[CHANGE_TO_DEDAULT]);
 	if(fChangeTime > 0.0 && get_players_num() == 0)
@@ -831,9 +837,9 @@ public plugin_end()
 	}
 	#endif
 	
-	if(g_fOldFreezeTime >= 0.0)
+	if(g_bChangedFreezeTime)
 	{
-		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
+		set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) - float(PRE_START_TIME + VOTE_TIME + 1));
 	}
 	if(g_fOldTimeLimit > 0.0)
 	{
@@ -1115,8 +1121,8 @@ public Event_NewRound()
 	
 	if(g_bVoteStarted && get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]) && get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
 	{
-		g_fOldFreezeTime = get_pcvar_float(g_pCvars[FREEZETIME]);
-		set_pcvar_float(g_pCvars[FREEZETIME], float(PRE_START_TIME + VOTE_TIME + 1));
+		g_bChangedFreezeTime = true;
+		set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) + float(PRE_START_TIME + VOTE_TIME + 1));
 	}
 	
 	#if defined FUNCTION_RTV
@@ -1398,6 +1404,27 @@ public StartVote(id)
 		}
 	}
 	
+	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	#else
+	#if defined FUNCTION_RTV
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#else
+	#if defined FUNCTION_NIGHTMODE
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	#else
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	#endif
+	#endif
+	#endif
+	{
+		g_bExtendMap = true;
+	}
+	else
+	{
+		g_bExtendMap = false;
+	}
+	
 	ArrayDestroy(aMaps);
 	
 	ForwardPreStartVote();
@@ -1528,19 +1555,7 @@ public VoteMenu(id)
 		}
 	}
 	
-	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
-	#else
-	#if defined FUNCTION_RTV
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
-	#else
-	#if defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
-	#else
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
-	#endif
-	#endif
-	#endif
+	if(g_bExtendMap)
 	{
 		iPercent = 0;
 		if(g_iTotalVotes)
@@ -1622,10 +1637,10 @@ FinishVote()
 	g_bVoteStarted = false;
 	g_bVoteFinished = true;
 	
-	if(get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]))
+	if(g_bChangedFreezeTime)
 	{
-		set_pcvar_float(g_pCvars[FREEZETIME], g_fOldFreezeTime);
-		g_fOldFreezeTime = -1.0;
+		set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) - float(PRE_START_TIME + VOTE_TIME + 1));
+		g_bChangedFreezeTime = false;
 	}
 	if(get_pcvar_num(g_pCvars[BLACK_SCREEN_IN_VOTE]))
 	{
@@ -1928,24 +1943,9 @@ public SetBlackScreenFade(fade)
 	
 	switch (fade)
 	{
-		case 1:
-		{
-			time = 1;
-			hold = 1;
-			flags = 4;
-		}
-		case 2:
-		{
-			time = 4096;
-			hold = 1024;
-			flags = 1;
-		}
-		default:
-		{
-			time = 4096;
-			hold = 1024;
-			flags = 2;
-		}
+		case 1: { time = 1; hold = 1; flags = 4; }
+		case 2: { time = 4096; hold = 1024; flags = 1; }
+		default:  { time = 4096; hold = 1024; flags = 2; }
 	}
 
 	message_begin(MSG_BROADCAST, iMsgScreenFade);
