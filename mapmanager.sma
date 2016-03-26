@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.43"
+#define VERSION "2.5.44"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -634,8 +634,9 @@ public NominationList_Handler(id, menu, item)
 }
 NominateMap(id, map[32], map_index)
 {
-	#if defined FUNCTION_BLOCK_MAPS
 	new eMapInfo[MAP_INFO]; ArrayGetArray(g_aMaps, map_index, eMapInfo);
+	
+	#if defined FUNCTION_BLOCK_MAPS
 	if(eMapInfo[m_BlockCount])
 	{
 		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOM_NOT_AVAILABLE_MAP");
@@ -1915,9 +1916,9 @@ get_int_time(string[], &hour, &minutes)
 stock get_ending(num, const a[], const b[], const c[], output[], lenght)
 {
 	new num100 = num % 100, num10 = num % 10;
-	if(num100 >=5 && num100 <= 20 || num10 == 0 || num10 >= 5 && num10 <= 9) format(output, lenght, "%s", a);
-	else if(num10 == 1) format(output, lenght, "%s", b);
-	else if(num10 >= 2 && num10 <= 4) format(output, lenght, "%s", c);
+	if(num100 >=5 && num100 <= 20 || num10 == 0 || num10 >= 5 && num10 <= 9) formatex(output, lenght, "%s", a);
+	else if(num10 == 1) formatex(output, lenght, "%s", b);
+	else if(num10 >= 2 && num10 <= 4) formatex(output, lenght, "%s", c);
 }
 stock SendAudio(id, audio[], pitch)
 {
@@ -1945,7 +1946,7 @@ public SetBlackScreenFade(fade)
 	{
 		case 1: { time = 1; hold = 1; flags = 4; }
 		case 2: { time = 4096; hold = 1024; flags = 1; }
-		default:  { time = 4096; hold = 1024; flags = 2; }
+		default: { time = 4096; hold = 1024; flags = 2; }
 	}
 
 	message_begin(MSG_BROADCAST, iMsgScreenFade);
