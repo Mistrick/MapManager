@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.44"
+#define VERSION "2.5.45"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -88,8 +88,10 @@ enum _:CVARS
 	LAST_ROUND,
 	CHANGE_TO_DEDAULT,
 	DEFAULT_MAP,
-	EXENDED_MAX,
-	EXENDED_TIME,
+	EXTENDED_TYPE,
+	EXTENDED_MAX,
+	EXTENDED_TIME,
+	EXTENDED_ROUNDS,
 #if defined FUNCTION_RTV
 	ROCK_MODE,
 	ROCK_PERCENT,
@@ -201,8 +203,10 @@ public plugin_init()
 	g_pCvars[CHANGE_TO_DEDAULT] = register_cvar("mapm_change_to_default_map", "0");//minutes, 0 - disable
 	g_pCvars[DEFAULT_MAP] = register_cvar("mapm_default_map", "de_dust2");
 	
-	g_pCvars[EXENDED_MAX] = register_cvar("mapm_extended_map_max", "3");
-	g_pCvars[EXENDED_TIME] = register_cvar("mapm_extended_time", "15");//minutes
+	g_pCvars[EXTENDED_TYPE] = register_cvar("mapm_extended_type", "0");//0 - minutes, 1 - rounds
+	g_pCvars[EXTENDED_MAX] = register_cvar("mapm_extended_map_max", "3");
+	g_pCvars[EXTENDED_TIME] = register_cvar("mapm_extended_time", "15");//minutes
+	g_pCvars[EXTENDED_ROUNDS] = register_cvar("mapm_extended_rounds", "3");//rounds
 	
 	#if defined FUNCTION_RTV
 	g_pCvars[ROCK_MODE] = register_cvar("mapm_rtv_mode", "0");//0 - percents, 1 - players
@@ -848,7 +852,23 @@ public plugin_end()
 	}
 	if(g_iExtendedMax)
 	{
-		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) - float(g_iExtendedMax * get_pcvar_num(g_pCvars[EXENDED_TIME])));
+		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 0)
+		{
+			set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) - float(g_iExtendedMax * get_pcvar_num(g_pCvars[EXTENDED_TIME])));
+		}
+		else
+		{
+			new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]);
+			if(iWinLimit > 0)
+			{
+				set_pcvar_num(g_pCvars[WINLIMIT], iWinLimit - get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]) * g_iExtendedMax);
+			}
+			new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
+			if(iMaxRounds > 0)
+			{
+				set_pcvar_num(g_pCvars[MAXROUNDS], iMaxRounds - get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]) * g_iExtendedMax);
+			}
+		}
 	}
 }
 public plugin_cfg()
@@ -1406,15 +1426,15 @@ public StartVote(id)
 	}
 	
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
 	#if defined FUNCTION_RTV
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
 	#else
 	#if defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXENDED_MAX]))
+	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
 	#endif
 	#endif
 	#endif
@@ -1702,11 +1722,35 @@ FinishVote()
 	{
 		g_bVoteFinished = false;
 		g_iExtendedMax++;
-		new iMin = get_pcvar_num(g_pCvars[EXENDED_TIME]);
-		new szMin[16]; get_ending(iMin, "MAPM_MINUTE1", "MAPM_MINUTE2", "MAPM_MINUTE3", szMin, charsmax(szMin));
 		
-		client_print_color(0, print_team_default, "%s^1 %L %L.", PREFIX, LANG_SERVER, "MAPM_MAP_EXTEND", iMin, LANG_SERVER, szMin);
-		set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(iMin));
+		new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]);
+		new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
+		
+		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (iWinLimit || iMaxRounds))
+		{
+			if(iWinLimit > 0)
+			{
+				set_pcvar_num(g_pCvars[WINLIMIT], iWinLimit + get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]));
+			}
+			
+			if(iMaxRounds > 0)
+			{
+				set_pcvar_num(g_pCvars[MAXROUNDS], iMaxRounds + get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]));
+			}
+			
+			new iRounds = get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]);
+			new szRounds[16]; get_ending(iRounds, "MAPM_ROUND1", "MAPM_ROUND2", "MAPM_ROUND3", szRounds, charsmax(szRounds));
+			
+			client_print_color(0, print_team_default, "%s^1 %L %L.", PREFIX, LANG_SERVER, "MAPM_MAP_EXTEND", iRounds, LANG_SERVER, szRounds);
+		}
+		else
+		{
+			new iMin = get_pcvar_num(g_pCvars[EXTENDED_TIME]);
+			new szMin[16]; get_ending(iMin, "MAPM_MINUTE1", "MAPM_MINUTE2", "MAPM_MINUTE3", szMin, charsmax(szMin));
+			
+			client_print_color(0, print_team_default, "%s^1 %L %L.", PREFIX, LANG_SERVER, "MAPM_MAP_EXTEND", iMin, LANG_SERVER, szMin);
+			set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(iMin));
+		}
 	}
 	
 	new iRet;
