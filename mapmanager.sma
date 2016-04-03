@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.45"
+#define VERSION "2.5.48"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -381,6 +381,12 @@ public Command_StopVote(id, flag)
 			SetBlackScreenFade(0);
 		}
 		
+		if(g_bChangedFreezeTime)
+		{
+			set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) - float(PRE_START_TIME + VOTE_TIME + 1));
+			g_bChangedFreezeTime = false;
+		}
+		
 		remove_task(TASK_VOTEMENU);
 		remove_task(TASK_SHOWTIMER);
 		remove_task(TASK_TIMER);
@@ -395,6 +401,7 @@ public Command_StopVote(id, flag)
 		else szName = "Server";
 		
 		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_CANCEL_VOTE", szName);
+		log_amx("%s canceled vote.", szName);
 	}
 	
 	return PLUGIN_HANDLED;
