@@ -38,8 +38,10 @@ mapm_black_screen_in_vote 0       // 0 - disable, 1 - enable
 mapm_last_round 0                 // 0 - disable, 1 - enable
 mapm_change_to_default_map 0      // 0 - disable, 1 - enable
 mapm_default_map de_dust2
+mapm_extended_type 0              // 0 - time, 1 - rounds
 mapm_extended_map_max 3
 mapm_extended_time 15             // in minutes
+mapm_extended_rounds 3
 mapm_rtv_mode 0                   // 0 - percents, 1 - players
 mapm_rtv_percent 60
 mapm_rtv_players 5
