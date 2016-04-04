@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.48"
+#define VERSION "2.5.49"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -1147,7 +1147,7 @@ public Event_NewRound()
 		StartVote(0);
 	}
 	
-	if(g_bVoteStarted && get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]) && get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
+	if(!g_bChangedFreezeTime && g_bVoteStarted && get_pcvar_num(g_pCvars[FREEZE_IN_VOTE]) && get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
 	{
 		g_bChangedFreezeTime = true;
 		set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) + float(PRE_START_TIME + VOTE_TIME + 1));
