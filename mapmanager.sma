@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.49"
+#define VERSION "2.5.50"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -408,14 +408,43 @@ public Command_StopVote(id, flag)
 }
 public Command_Timeleft(id)
 {
-	if (get_pcvar_num(g_pCvars[TIMELIMIT]))
+	new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]);
+	new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
+	
+	if((iWinLimit || iMaxRounds) && get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1)
 	{
-		new a = get_timeleft();
-		client_print_color(0, id, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_TIME_TO_END", (a / 60), (a % 60));
+		// До конца карты осталось X побед <либо> Y раундов.
+		new szText[128], len;
+		len = formatex(szText, charsmax(szText), "%L ", LANG_SERVER, "MAPM_TIME_TO_END");
+		if(iWinLimit)
+		{
+			new iLeftWins = iWinLimit - max(g_iTeamScore[0], g_iTeamScore[1]);
+			new szWins[16]; get_ending(iLeftWins, "MAPM_WIN1", "MAPM_WIN2", "MAPM_WIN3", szWins, charsmax(szWins));
+			len += formatex(szText[len], charsmax(szText) - len, "%d %L", iLeftWins, LANG_SERVER, szWins);
+		}
+		if(iWinLimit && iMaxRounds)
+		{
+			len += formatex(szText[len], charsmax(szText) - len, " %L ", LANG_SERVER, "MAPM_TIMELEFT_OR");
+		}added showing winlimit/maxrounds to timeleft cmd and fix nomination with more than 127 maps
+		if(iMaxRounds)
+		{
+			new iLeftRounds = iMaxRounds - g_iTeamScore[0] - g_iTeamScore[1];
+			new szRounds[16]; get_ending(iLeftRounds, "MAPM_ROUND1", "MAPM_ROUND2", "MAPM_ROUND3", szRounds, charsmax(szRounds));
+			len += formatex(szText[len], charsmax(szText) - len, "%d %L", iLeftRounds, LANG_SERVER, szRounds);
+		}
+		client_print_color(0, print_team_default, "%s^1 %s.", PREFIX, szText);
 	}
 	else
 	{
-		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NO_TIMELIMIT");
+		if (get_pcvar_num(g_pCvars[TIMELIMIT]))
+		{
+			new a = get_timeleft();
+			client_print_color(0, id, "%s^1 %L:^3 %d:%02d", PREFIX, LANG_SERVER, "MAPM_TIME_TO_END", (a / 60), (a % 60));
+		}
+		else
+		{
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NO_TIMELIMIT");
+		}
 	}
 }
 public Command_TheTime(id)
@@ -566,12 +595,12 @@ public Show_NominationList(id, Array: array, size)
 	new iMenu = menu_create(szText, "NominationList_Handler");
 	new eMapInfo[MAP_INFO], szString[64], map_index, nominate_index;
 	
-	for(new i, szNum[2]; i < size; i++)
+	for(new i, szNum[8]; i < size; i++)
 	{
 		map_index = ArrayGetCell(array, i);
 		ArrayGetArray(g_aMaps, map_index, eMapInfo);
 		
-		szNum[0] = map_index;
+		num_to_str(map_index, szNum, charsmax(szNum));
 		nominate_index = is_map_nominated(map_index);
 		
 		if(eMapInfo[m_BlockCount])
@@ -616,10 +645,10 @@ public NominationList_Handler(id, menu, item)
 		return PLUGIN_HANDLED;
 	}
 	
-	new szData[2], szName[32], iAccess, iCallback;
+	new szData[8], szName[32], iAccess, iCallback;
 	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
 	
-	new map_index = szData[0];
+	new map_index = str_to_num(szData);
 	trim_bracket(szName);
 	new is_map_nominated = NominateMap(id, szName, map_index);
 	
@@ -717,16 +746,15 @@ Show_MapsListMenu(id)
 	
 	new eMapInfo[MAP_INFO], szString[48], iSize = ArraySize(g_aMaps);
 	
-	for(new i, nominate_index, szNum[2]; i < iSize; i++)
+	for(new i, nominate_index; i < iSize; i++)
 	{
 		ArrayGetArray(g_aMaps, i, eMapInfo);
-		szNum[0] = i;
 		nominate_index = is_map_nominated(i);
 		
 		if(eMapInfo[m_BlockCount])
 		{
 			formatex(szString, charsmax(szString), "%s[\r%d\d]", eMapInfo[m_MapName], eMapInfo[m_BlockCount]);
-			menu_additem(iMenu, szString, szNum, (1 << 31));
+			menu_additem(iMenu, szString, _, (1 << 31));
 		}
 		else if(nominate_index)
 		{
@@ -734,17 +762,17 @@ Show_MapsListMenu(id)
 			if(id == eNomInfo[n_Player])
 			{
 				formatex(szString, charsmax(szString), "%s[\y*\w]", eMapInfo[m_MapName]);
-				menu_additem(iMenu, szString, szNum);
+				menu_additem(iMenu, szString);
 			}
 			else
 			{
 				formatex(szString, charsmax(szString), "%s[\y*\d]", eMapInfo[m_MapName]);
-				menu_additem(iMenu, szString, szNum, (1 << 31));
+				menu_additem(iMenu, szString, _, (1 << 31));
 			}
 		}
 		else
 		{
-			menu_additem(iMenu, eMapInfo[m_MapName], szNum);
+			menu_additem(iMenu, eMapInfo[m_MapName]);
 		}
 	}
 	formatex(szText, charsmax(szText), "%L", LANG_SERVER, "MAPM_MENU_BACK");
@@ -767,7 +795,7 @@ public MapsListMenu_Handler(id, menu, item)
 	new szData[2], szName[32], iAccess, iCallback;
 	menu_item_getinfo(menu, item, iAccess, szData, charsmax(szData), szName, charsmax(szName), iCallback);
 	
-	new map_index = szData[0];
+	new map_index = item;
 	trim_bracket(szName);
 	new is_map_nominated = NominateMap(id, szName, map_index);
 	

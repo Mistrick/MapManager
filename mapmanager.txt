@@ -1,7 +1,8 @@
 [en]
 MAPM_VOTE_WILL_BEGIN = The voting will begin in next round.
 MAPM_CANCEL_VOTE = %s^1 canceled voting.
-MAPM_TIME_TO_END = Time left until map end:^3 %d:%02d
+MAPM_TIME_TO_END = Until map end left
+MAPM_TIMELEFT_OR = or
 MAPM_NO_TIMELIMIT = Map has no time limit.
 MAPM_THETIME = Current time^1:^4 %s^1.
 MAPM_NEXTMAP = Next map:
@@ -56,11 +57,15 @@ MAPM_MINUTE3 = minutes
 MAPM_ROUND1 = rounds
 MAPM_ROUND2 = rounds
 MAPM_ROUND3 = rounds
+MAPM_WIN1 = wins
+MAPM_WIN2 = wins
+MAPM_WIN3 = wins
 
 [ru]
 MAPM_VOTE_WILL_BEGIN = Голосование начнется в следующем раунде.
 MAPM_CANCEL_VOTE = %s^1 отменил голосование.
-MAPM_TIME_TO_END = До конца карты осталось:^3 %d:%02d
+MAPM_TIME_TO_END = До конца карты осталось
+MAPM_TIMELEFT_OR = либо
 MAPM_NO_TIMELIMIT = Карта не ограничена по времени.
 MAPM_THETIME = Текущее время^1:^4 %s^1.
 MAPM_NEXTMAP = Следующая карта:
@@ -115,3 +120,6 @@ MAPM_MINUTE3 = минуты
 MAPM_ROUND1 = раундов
 MAPM_ROUND2 = раунд
 MAPM_ROUND3 = раунда
+MAPM_WIN1 = побед
+MAPM_WIN2 = победа
+MAPM_WIN3 = победы
