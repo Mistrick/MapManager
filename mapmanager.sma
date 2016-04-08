@@ -413,7 +413,6 @@ public Command_Timeleft(id)
 	
 	if((iWinLimit || iMaxRounds) && get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1)
 	{
-		// До конца карты осталось X побед <либо> Y раундов.
 		new szText[128], len;
 		len = formatex(szText, charsmax(szText), "%L ", LANG_SERVER, "MAPM_TIME_TO_END");
 		if(iWinLimit)
@@ -425,7 +424,7 @@ public Command_Timeleft(id)
 		if(iWinLimit && iMaxRounds)
 		{
 			len += formatex(szText[len], charsmax(szText) - len, " %L ", LANG_SERVER, "MAPM_TIMELEFT_OR");
-		}added showing winlimit/maxrounds to timeleft cmd and fix nomination with more than 127 maps
+		}
 		if(iMaxRounds)
 		{
 			new iLeftRounds = iMaxRounds - g_iTeamScore[0] - g_iTeamScore[1];
