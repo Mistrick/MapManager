@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.50"
+#define VERSION "2.5.52"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -1180,6 +1180,16 @@ public Event_NewRound()
 		set_pcvar_float(g_pCvars[FREEZETIME], get_pcvar_float(g_pCvars[FREEZETIME]) + float(PRE_START_TIME + VOTE_TIME + 1));
 	}
 	
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bVoteFinished && (g_bNightModeOneMap && get_pcvar_num(g_pCvars[CHANGE_TYPE]) >= 1 || !g_bCurMapInNightMode))
+	{
+		Intermission();
+		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
+		client_print_color(0, print_team_default, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NEXTMAP", szMapName);
+		return;
+	}
+	#endif
+	
 	#if defined FUNCTION_RTV
 	if(g_bVoteFinished && (g_bRockVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[CHANGE_TYPE]) == 1 || get_pcvar_num(g_pCvars[LAST_ROUND])))
 	#else
@@ -1190,15 +1200,6 @@ public Event_NewRound()
 		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
 		client_print_color(0, print_team_default, "%s^1 %L^3 %s^1.", PREFIX, LANG_SERVER, "MAPM_NEXTMAP", szMapName);
 	}
-	
-	#if defined FUNCTION_NIGHTMODE
-	if(g_bNightMode && g_bVoteFinished && (g_bNightModeOneMap && get_pcvar_num(g_pCvars[CHANGE_TYPE]) >= 1 || !g_bCurMapInNightMode))
-	{
-		Intermission();
-		new szMapName[32]; get_pcvar_string(g_pCvars[NEXTMAP], szMapName, charsmax(szMapName));
-		client_print_color(0, print_team_default, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NIGHT_NEXTMAP", szMapName);
-	}
-	#endif
 }
 public Event_TeamScore()
 {
@@ -1759,6 +1760,10 @@ FinishVote()
 		
 		new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]);
 		new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
+		
+		g_iRockVotes = 0;
+		g_bRockVote = false;
+		arrayset(g_bRockVoted, false, sizeof(g_bRockVoted));
 		
 		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (iWinLimit || iMaxRounds))
 		{
