@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.52"
+#define VERSION "2.5.53"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -30,6 +30,7 @@
 #define BLOCK_MAP_COUNT 5
 
 #define MAX_ROUND_TIME 3.5
+#define MIN_DENOMINATE_TIME 3
 
 new const PREFIX[] = "^4[MapManager]";
 
@@ -162,6 +163,7 @@ new g_bRockVote;
 #if defined FUNCTION_NOMINATION
 new Array:g_aNominatedMaps;
 new g_iNominatedMaps[33];
+new g_iLastDenominate[33];
 new Array:g_aMapPrefixes;
 new g_iMapPrefixesNum;
 #endif
@@ -692,11 +694,17 @@ NominateMap(id, map[32], map_index)
 		ArrayGetArray(g_aNominatedMaps, nominate_index - 1, eNomInfo);
 		if(id == eNomInfo[n_Player])
 		{
-			g_iNominatedMaps[id]--;
-			ArrayDeleteItem(g_aNominatedMaps, nominate_index - 1);
-			
-			client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_REMOVE_NOM", szName, map);
-			return 2;
+			new iSysTime = get_systime();
+			if(g_iLastDenominate[id] + MIN_DENOMINATE_TIME <= iSysTime)
+			{
+				g_iLastDenominate[id] = iSysTime;
+				g_iNominatedMaps[id]--;
+				ArrayDeleteItem(g_aNominatedMaps, nominate_index - 1);
+				
+				client_print_color(0, id, "%s^3 %L", PREFIX, LANG_SERVER, "MAPM_NOM_REMOVE_NOM", szName, map);
+				return 2;
+			}
+			return 0;
 		}
 		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, LANG_SERVER, "MAPM_NOM_ALREADY_NOM");
 		return 0;
