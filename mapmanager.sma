@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.54"
+#define VERSION "2.5.55"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -505,49 +505,37 @@ public Command_RockTheVote(id)
 		iVotes = floatround(get_players_num() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRockVotes;
 	}
 	
+	if(iVotes <= 0)
+	{
+		g_bRockVote = true;
+		if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
+		{
+			StartVote(0);
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_RTV_START_VOTE");
+		}
+		else
+		{
+			g_bStartVote = true;
+			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_START_VOTE_NEW_ROUND");
+		}
+		return PLUGIN_HANDLED;
+	}
+	
 	if(!g_bRockVoted[id])
 	{
 		g_bRockVoted[id] = true;		
 		
-		if(iVotes > 0)
-		{
-			new szName[33];	get_user_name(id, szName, charsmax(szName));
-			new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
-			client_print_color(0, print_team_default, "%s^3 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_VOTED", szName, iVotes, LANG_PLAYER, szVote);
-		}
-		else
-		{
-			SetVote();
-		}
+		new szName[33];	get_user_name(id, szName, charsmax(szName));
+		new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+		client_print_color(0, print_team_default, "%s^3 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_VOTED", szName, iVotes, LANG_PLAYER, szVote);
 	}
 	else
 	{
-		if(iVotes > 0)
-		{
-			new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
-			client_print_color(id, print_team_default, "%s^1 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_ALREADY_VOTED", iVotes, LANG_PLAYER, szVote);
-		}
-		else
-		{
-			SetVote();
-		}
+		new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+		client_print_color(id, print_team_default, "%s^1 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_ALREADY_VOTED", iVotes, LANG_PLAYER, szVote);
 	}
 	
 	return PLUGIN_HANDLED;
-}
-SetVote()
-{
-	g_bRockVote = true;
-	if(!get_pcvar_num(g_pCvars[START_VOTE_IN_NEW_ROUND]))
-	{
-		StartVote(0);
-		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_RTV_START_VOTE");
-	}
-	else
-	{
-		g_bStartVote = true;
-		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_START_VOTE_NEW_ROUND");
-	}
 }
 #endif
 
