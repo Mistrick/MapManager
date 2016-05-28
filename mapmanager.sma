@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.55"
+#define VERSION "2.5.56"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -495,15 +495,7 @@ public Command_RockTheVote(id)
 	
 	if(!g_bRockVoted[id]) g_iRockVotes++;
 	
-	new iVotes;
-	if(get_pcvar_num(g_pCvars[ROCK_MODE]))
-	{
-		iVotes = get_pcvar_num(g_pCvars[ROCK_PLAYERS]) - g_iRockVotes;
-	}
-	else
-	{
-		iVotes = floatround(get_players_num() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRockVotes;
-	}
+	new iVotes = (get_pcvar_num(g_pCvars[ROCK_MODE])) ? get_pcvar_num(g_pCvars[ROCK_PLAYERS]) - g_iRockVotes : floatround(get_players_num() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRockVotes;
 	
 	if(iVotes <= 0)
 	{
@@ -521,17 +513,17 @@ public Command_RockTheVote(id)
 		return PLUGIN_HANDLED;
 	}
 	
+	new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+	
 	if(!g_bRockVoted[id])
 	{
 		g_bRockVoted[id] = true;		
 		
 		new szName[33];	get_user_name(id, szName, charsmax(szName));
-		new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
 		client_print_color(0, print_team_default, "%s^3 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_VOTED", szName, iVotes, LANG_PLAYER, szVote);
 	}
 	else
 	{
-		new szVote[16];	get_ending(iVotes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
 		client_print_color(id, print_team_default, "%s^1 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_ALREADY_VOTED", iVotes, LANG_PLAYER, szVote);
 	}
 	
@@ -1163,14 +1155,14 @@ public DelayedChange()
 public Event_NewRound()
 {
 	new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
-	if(iMaxRounds && (g_iTeamScore[0] + g_iTeamScore[1]) >= iMaxRounds - 2)
+	if(!g_bVoteFinished && iMaxRounds && (g_iTeamScore[0] + g_iTeamScore[1]) >= iMaxRounds - 2)
 	{
 		log_amx("StartVote: maxrounds %d [%d]", iMaxRounds, g_iTeamScore[0] + g_iTeamScore[1]);
 		StartVote(0);
 	}
 	
 	new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]) - 2;
-	if(iWinLimit > 0 && (g_iTeamScore[0] >= iWinLimit || g_iTeamScore[1] >= iWinLimit))
+	if(!g_bVoteFinished && iWinLimit > 0 && (g_iTeamScore[0] >= iWinLimit || g_iTeamScore[1] >= iWinLimit))
 	{
 		log_amx("StartVote: winlimit %d [%d/%d]", iWinLimit, g_iTeamScore[0], g_iTeamScore[1]);
 		StartVote(0);
