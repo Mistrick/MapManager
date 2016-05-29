@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.56"
+#define VERSION "2.5.57"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -1460,16 +1460,18 @@ public StartVote(id)
 		}
 	}
 	
+	new bAllow = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
+	
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if((get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0  || bAllow) && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
 	#if defined FUNCTION_RTV
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
+	if((get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0  || bAllow) && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
 	#else
 	#if defined FUNCTION_NIGHTMODE
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
+	if((get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0  || bAllow) && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
 	#else
-	if(get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0 && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
+	if((get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0  || bAllow) && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]))
 	#endif
 	#endif
 	#endif
@@ -1767,19 +1769,18 @@ FinishVote()
 		
 		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (iWinLimit || iMaxRounds))
 		{
+			new iRounds = get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]);
+			
 			if(iWinLimit > 0)
 			{
-				set_pcvar_num(g_pCvars[WINLIMIT], iWinLimit + get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]));
+				set_pcvar_num(g_pCvars[WINLIMIT], iWinLimit + iRounds);
 			}
-			
 			if(iMaxRounds > 0)
 			{
-				set_pcvar_num(g_pCvars[MAXROUNDS], iMaxRounds + get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]));
+				set_pcvar_num(g_pCvars[MAXROUNDS], iMaxRounds + iRounds);
 			}
 			
-			new iRounds = get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]);
 			new szRounds[16]; get_ending(iRounds, "MAPM_ROUND1", "MAPM_ROUND2", "MAPM_ROUND3", szRounds, charsmax(szRounds));
-			
 			client_print_color(0, print_team_default, "%s^1 %L %L.", PREFIX, LANG_PLAYER, "MAPM_MAP_EXTEND", iRounds, LANG_PLAYER, szRounds);
 		}
 		else
