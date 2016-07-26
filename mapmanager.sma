@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.58"
+#define VERSION "2.5.59"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -15,7 +15,7 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
-#define FUNCTION_NIGHTMODE
+//#define FUNCTION_NIGHTMODE
 #define FUNCTION_NIGHTMODE_BLOCK_CMDS
 #define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
@@ -1154,11 +1154,6 @@ public DelayedChange()
 #endif
 public Event_NewRound()
 {
-	if(g_bVoteStarted || g_bVoteFinished)
-	{
-		return;
-	}
-	
 	new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
 	if(!g_bVoteFinished && iMaxRounds && (g_iTeamScore[0] + g_iTeamScore[1]) >= iMaxRounds - 2)
 	{
