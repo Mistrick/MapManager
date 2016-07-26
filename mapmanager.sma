@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.57"
+#define VERSION "2.5.58"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -15,7 +15,7 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
-//#define FUNCTION_NIGHTMODE
+#define FUNCTION_NIGHTMODE
 #define FUNCTION_NIGHTMODE_BLOCK_CMDS
 #define FUNCTION_BLOCK_MAPS
 #define FUNCTION_SOUND
@@ -1154,6 +1154,11 @@ public DelayedChange()
 #endif
 public Event_NewRound()
 {
+	if(g_bVoteStarted || g_bVoteFinished)
+	{
+		return;
+	}
+	
 	new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
 	if(!g_bVoteFinished && iMaxRounds && (g_iTeamScore[0] + g_iTeamScore[1]) >= iMaxRounds - 2)
 	{
@@ -1250,8 +1255,7 @@ public Task_CheckNight()
 	get_int_time(szStart, iStartHour, iStartMinutes);
 	get_int_time(szEnd, iEndHour, iEndMinutes);
 	
-	get_time("%H:%M", szTime, charsmax(szTime));
-	new iCurHour, iCurMinutes; get_int_time(szTime, iCurHour, iCurMinutes);	
+	new iCurHour, iCurMinutes; time(iCurHour, iCurMinutes);
 	
 	new bOldNightMode = g_bNightMode;
 	
@@ -1343,6 +1347,7 @@ public StartVote(id)
 	g_bStartVote = false;
 	
 	ResetInfo();
+	CheckAllowExtendMap();
 	
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode)
@@ -1460,6 +1465,14 @@ public StartVote(id)
 		}
 	}
 	
+	ArrayDestroy(aMaps);
+	
+	ForwardPreStartVote();
+	
+	return 0;
+}
+CheckAllowExtendMap()
+{
 	new bAllow = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
 	
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
@@ -1482,12 +1495,6 @@ public StartVote(id)
 	{
 		g_bExtendMap = false;
 	}
-	
-	ArrayDestroy(aMaps);
-	
-	ForwardPreStartVote();
-	
-	return 0;
 }
 ResetInfo()
 {
