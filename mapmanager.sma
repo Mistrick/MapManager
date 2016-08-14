@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.59"
+#define VERSION "2.5.60"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -29,7 +29,6 @@
 
 #define BLOCK_MAP_COUNT 5
 
-#define MAX_ROUND_TIME 3.5
 #define MIN_DENOMINATE_TIME 3
 
 new const PREFIX[] = "^4[MapManager]";
@@ -131,6 +130,7 @@ new g_iTeamScore[2];
 new g_szCurrentMap[32];
 new g_bVoteStarted;
 new g_bVoteFinished;
+new g_bNotUnlimitTime;
 
 new g_eMenuItems[SELECT_MAPS + 1][VOTEMENU_INFO];
 new g_iMenuItemsCount;
@@ -358,7 +358,7 @@ public Command_StartVote(id, flag)
 	}
 	else
 	{
-		g_bStartVote = true;
+		SetNewRoundVote();
 		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_VOTE_WILL_BEGIN");
 	}
 	
@@ -507,7 +507,7 @@ public Command_RockTheVote(id)
 		}
 		else
 		{
-			g_bStartVote = true;
+			SetNewRoundVote();
 			client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_START_VOTE_NEW_ROUND");
 		}
 		return PLUGIN_HANDLED;
@@ -534,7 +534,7 @@ public Command_RockTheVote(id)
 #if defined FUNCTION_NOMINATION
 public Command_Say(id)
 {
-	if(g_bVoteStarted) return;
+	if(g_bVoteStarted || g_bVoteFinished) return;
 	
 	#if defined FUNCTION_NIGHTMODE
 	if(g_bNightMode) return;
@@ -907,6 +907,15 @@ public plugin_end()
 }
 public plugin_cfg()
 {
+	new filepath[256]; get_localinfo("amxx_configsdir", filepath, charsmax(filepath));
+	add(filepath, charsmax(filepath), "/mapmanager.cfg");
+	
+	if(file_exists(filepath))
+	{
+		server_cmd("exec %s", filepath);
+		server_exec();
+	}
+	
 	g_aMaps = ArrayCreate(MAP_INFO);
 	
 	#if defined FUNCTION_NOMINATION
@@ -1216,13 +1225,7 @@ public Task_CheckTime()
 	
 	if(get_pcvar_float(g_pCvars[TIMELIMIT]) <= 0.0) return PLUGIN_CONTINUE;
 	
-	new Float:fRoundTime = get_pcvar_float(g_pCvars[ROUNDTIME]);
 	new Float:fTimeToVote = get_pcvar_float(g_pCvars[START_VOTE_BEFORE_END]);
-	
-	if(fRoundTime > fTimeToVote && fRoundTime < MAX_ROUND_TIME)
-	{
-		set_pcvar_float(g_pCvars[START_VOTE_BEFORE_END], (fTimeToVote = fRoundTime + 1.0));
-	}
 	
 	new iTimeLeft = get_timeleft();
 	if(iTimeLeft <= floatround(fTimeToVote * 60.0))
@@ -1234,7 +1237,7 @@ public Task_CheckTime()
 		}
 		else
 		{
-			g_bStartVote = true;
+			SetNewRoundVote();
 		}
 	}
 	
@@ -1311,7 +1314,7 @@ public Task_CheckNight()
 			}
 			else
 			{
-				g_bStartVote = true;
+				SetNewRoundVote()
 				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_NIGHT_NEXT_ROUND_CHANGE2");
 			}
 		}
@@ -1326,7 +1329,16 @@ public Task_CheckNight()
 	}
 }
 #endif
-
+SetNewRoundVote()
+{
+	g_bStartVote = true;
+	g_fOldTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
+	if(g_fOldTimeLimit > 0.0)
+	{
+		g_bNotUnlimitTime = true;
+		set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
+	}
+}
 public StartVote(id)
 {
 	if(g_bVoteStarted) return 0;
@@ -1468,7 +1480,7 @@ public StartVote(id)
 }
 CheckAllowExtendMap()
 {
-	new bAllow = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
+	new bAllow = g_bNotUnlimitTime || get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
 	
 	#if defined FUNCTION_RTV && defined FUNCTION_NIGHTMODE
 	if((get_pcvar_float(g_pCvars[TIMELIMIT]) > 0.0  || bAllow) && !g_bRockVote && g_iExtendedMax < get_pcvar_num(g_pCvars[EXTENDED_MAX]) && (g_bNightMode && g_bCurMapInNightMode || !g_bNightMode))
@@ -1490,6 +1502,8 @@ CheckAllowExtendMap()
 	{
 		g_bExtendMap = false;
 	}
+	
+	g_bNotUnlimitTime = false;
 }
 ResetInfo()
 {
@@ -1716,6 +1730,12 @@ FinishVote()
 			case 0: if(g_eMenuItems[iMaxVote][v_Votes] < g_eMenuItems[i][v_Votes]) iMaxVote = i;
 			case 1: if(g_eMenuItems[iMaxVote][v_Votes] <= g_eMenuItems[i][v_Votes]) iMaxVote = i;
 		}
+	}
+	
+	if(g_fOldTimeLimit > 0.0)
+	{
+		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
+		g_fOldTimeLimit = 0.0;
 	}
 	
 	if(!g_iTotalVotes || (iMaxVote != g_iMenuItemsCount))
