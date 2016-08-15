@@ -1314,7 +1314,7 @@ public Task_CheckNight()
 			}
 			else
 			{
-				SetNewRoundVote()
+				SetNewRoundVote();
 				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_NIGHT_NEXT_ROUND_CHANGE2");
 			}
 		}
