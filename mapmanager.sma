@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "2.5.60"
+#define VERSION "2.5.61"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -1785,9 +1785,11 @@ FinishVote()
 		new iWinLimit = get_pcvar_num(g_pCvars[WINLIMIT]);
 		new iMaxRounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
 		
+		#if defined FUNCTION_RTV
 		g_iRockVotes = 0;
 		g_bRockVote = false;
 		arrayset(g_bRockVoted, false, sizeof(g_bRockVoted));
+		#endif
 		
 		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (iWinLimit || iMaxRounds))
 		{
