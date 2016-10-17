@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "3.0.28"
+#define VERSION "3.0.33"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -43,6 +43,10 @@ new const FILE_NIGHT_MAPS[] = "nightmaps.ini"; //configdir
 
 ///**************************///
 
+#define MAX_ITEMS 8
+
+///**************************///
+
 enum _:MapsListStruct
 {
 	m_MapName[32],
@@ -58,6 +62,20 @@ enum MapsListIndexes
 	NightListEnd
 };
 
+enum _:NominationStruct
+{
+	n_MapName[32],
+	n_Player,
+	n_MapIndex
+};
+
+enum _:VoteMenuStruct
+{
+	v_MapName[32],
+	v_MapIndex,
+	v_Votes
+};
+
 enum Cvars
 {
 	CHANGE_TYPE
@@ -70,6 +88,16 @@ new g_iMapsListIndexes[MapsListIndexes];
 
 new Array:g_aMapsPrefixes;
 new g_iMapsPrefixesNum;
+
+new Array:g_aNominationList;
+
+new bool:g_bVoteStarted;
+new bool:g_bVoteFinished;
+
+new g_eVoteMenu[SELECT_MAPS + 1][VoteMenuStruct];
+new g_iVoteItems;
+
+new bool:g_bNight;
 
 public plugin_init()
 {
@@ -85,6 +113,7 @@ public plugin_cfg()
 {
 	g_aMapsList = ArrayCreate(MapsListStruct);
 	g_aMapsPrefixes = ArrayCreate(32);
+	g_aNominationList = ArrayCreate(NominationStruct);
 
 	new Trie:tBlockedMaps = TrieCreate();
 
@@ -99,8 +128,8 @@ LoadBlockedMaps(Trie:tBlockedMaps)
 	new file_dir[128]; get_localinfo("amxx_datadir", file_dir, charsmax(file_dir));
 	new file_path[128]; formatex(file_path, charsmax(file_path), "%s/%s", file_dir, FILE_BLOCKED_MAPS);
 
-	new cur_map[32]; get_mapname(cur_map, charsmax(cur_map));
-
+	new cur_map[32]; get_mapname(cur_map, charsmax(cur_map)); strtolower(cur_map);
+	
 	TrieSetCell(tBlockedMaps, cur_map, 1);
 
 	new file, temp;
@@ -117,6 +146,8 @@ LoadBlockedMaps(Trie:tBlockedMaps)
 		{
 			fgets(file, buffer, charsmax(buffer));
 			parse(buffer, map, charsmax(map), str_count, charsmax(str_count));
+
+			strtolower(map);
 			
 			if(!is_map_valid(map) || TrieKeyExists(tBlockedMaps, map)) continue;
 			
@@ -157,11 +188,10 @@ LoadMapFile(Trie:tBlockedMaps, load_night_maps = false)
 	new file_path[128]; get_localinfo("amxx_configsdir", file_path, charsmax(file_path));
 	format(file_path, charsmax(file_path), "%s/%s", file_path, load_night_maps ? FILE_NIGHT_MAPS : FILE_MAPS);
 
-	if(!file_exists(file_path))
+	if(!load_night_maps && !file_exists(file_path))
 	{
 		set_fail_state("Maps file doesn't exist.");
 	}
-
 
 	if(load_night_maps)
 	{
@@ -180,6 +210,8 @@ LoadMapFile(Trie:tBlockedMaps, load_night_maps = false)
 			fgets(file, text, charsmax(text));
 			parse(text, map, charsmax(map), min, charsmax(min), max, charsmax(max));
 			
+			strtolower(map);
+
 			if(!map[0] || map[0] == ';' || !valid_map(map) || is_map_in_array(map, load_night_maps) || equali(map, cur_map)) continue;
 			
 			if(get_map_prefix(map, prefix, charsmax(prefix)) && !is_prefix_in_array(prefix))
@@ -203,6 +235,7 @@ LoadMapFile(Trie:tBlockedMaps, load_night_maps = false)
 		fclose(file);
 		
 		new size = ArraySize(g_aMapsList);
+
 		if(!load_night_maps && size == 0)
 		{
 			set_fail_state("Nothing loaded from file.");
@@ -229,9 +262,8 @@ public Command_Debug(id, flag)
 		console_print(id, "%3d %32s ^t%d^t%d^t%d", i + 1, eMapInfo[m_MapName], eMapInfo[m_MinPlayers], eMapInfo[m_MaxPlayers], eMapInfo[m_BlockCount]);
 	}
 
-	new prefix[32];
 	console_print(id, "^nLoaded prefixes:");
-	for(new i; i < g_iMapsPrefixesNum; i++)
+	for(new i, prefix[32]; i < g_iMapsPrefixesNum; i++)
 	{
 		ArrayGetString(g_aMapsPrefixes, i, prefix, charsmax(prefix));
 		console_print(id, "%s", prefix);
@@ -259,20 +291,101 @@ public Command_StopVote(id, flag)
 }
 PrepareVote(second_vote = false)
 {
+	if(g_bVoteStarted) return 0;
+
 	if(second_vote)
 	{
 		// vote with 2 top voted maps
+
+		return 1;
 	}
 
 	// standart vote
+
+	new start, end;
+
+	if(g_bNight)
+	{
+		start = g_iMapsListIndexes[NightListStart];
+		end = g_iMapsListIndexes[NightListEnd];
+	}
+	else
+	{
+		start = 0;
+		end = g_iMapsListIndexes[MapsListEnd];
+	}
+
+	//TODO: check menu size
+	//TODO: check blocked maps count
+	new items = 0;
+	new menu_max_items = min(min(end - start, SELECT_MAPS), MAX_ITEMS);
+
+	//TODO: add nominated maps to vote
+
+	new Array:aMapsRange = ArrayCreate(VoteMenuStruct);
+	new eMapInfo[MapsListStruct];
+	new eMenuInfo[VoteMenuStruct];
+	new players_num = _get_players_num();
+
+	for(new i = start; i < end; i++)
+	{
+		ArrayGetArray(g_aMapsList, i, eMapInfo);
+
+		if(!eMapInfo[m_BlockCount] && eMapInfo[m_MinPlayers] <= players_num <= eMapInfo[m_MaxPlayers])
+		{
+			copy(eMenuInfo[v_MapName], charsmax(eMenuInfo[v_MapName]), eMapInfo[m_MapName]);
+			eMenuInfo[v_MapIndex] = i;
+			ArrayPushArray(aMapsRange, eMenuInfo);
+		}
+	}
+
+	if(items < menu_max_items)
+	{
+		for(new random_map, size = ArraySize(aMapsRange); size && items < menu_max_items; items++)
+		{
+			random_map = random(size);
+			ArrayGetArray(aMapsRange, random_map, eMenuInfo);
+
+			copy(g_eVoteMenu[items][v_MapName], charsmax(g_eVoteMenu[][v_MapName]), eMenuInfo[v_MapName]);
+			g_eVoteMenu[items][v_MapIndex] = eMenuInfo[v_MapIndex];
+
+			ArrayDeleteItem(aMapsRange, random_map);
+			size = ArraySize(aMapsRange);
+		}
+	}
+
+	ArrayDestroy(aMapsRange);
+
+	if(items < menu_max_items)
+	{
+		for(new random_map; items < menu_max_items; items++)
+		{
+			do {
+				random_map = random_num(start, end - 1);
+				ArrayGetArray(g_aMapsList, random_map, eMapInfo);
+			} while(eMapInfo[m_BlockCount] || is_map_in_menu(random_map));
+
+			copy(g_eVoteMenu[items][v_MapName], charsmax(g_eVoteMenu[][v_MapName]), eMapInfo[m_MapName]);
+			g_eVoteMenu[items][v_MapIndex] = random_map;
+		}
+	}
+
+	g_iVoteItems = items;
+
+	return 1;
 }
 StartVote()
 {
+	g_bVoteStarted = true;
 
+	//Show menu
 }
 FinishVote()
 {
+	g_bVoteStarted = false;
+	g_bVoteFinished = true;
 
+	//Check votes
 }
 stock valid_map(map[])
 {
@@ -322,4 +435,17 @@ get_map_prefix(map[], prefix[], size)
 		}
 	}
 	return 0;
+}
+_get_players_num()
+{
+	new players[32], pnum; get_players(players, pnum, "ch");
+	return pnum;
+}
+is_map_in_menu(index)
+{
+	for(new i; i < sizeof(g_eVoteMenu); i++)
+	{
+		if(g_eVoteMenu[i][v_MapIndex] == index) return true;
+	}
+	return false;
 }
