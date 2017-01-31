@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "3.0.0-154"
+#define VERSION "3.0.0-160"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -45,6 +45,8 @@ new const FILE_NIGHT_MAPS[] = "nightmaps.ini"; //configdir
 #define MAP_NAME_LENGTH 32
 
 ///**************************///
+
+#define _SVC_INTERMISSION "30"
 
 enum _:MapsListStruct
 {
@@ -119,10 +121,11 @@ enum Forwards
 	_StopVote
 };
 
-enum _:Tasks(+=100)
+enum (+=100)
 {
 	TASK_TIMER = 150,
-	TASK_CHECKTIME
+	TASK_CHECKTIME,
+	TASK_DELAYED_CHANGE
 };
 
 enum
@@ -192,9 +195,9 @@ public plugin_init()
 	g_pCvars[SHOW_RESULT_TYPE] = register_cvar("mapm_show_result_type", "1"); //0 - disable, 1 - menu, 2 - hud
 	g_pCvars[SHOW_SELECTS] = register_cvar("mapm_show_selects", "1"); // 0 - disable, 1 - all
 	g_pCvars[VOTE_IN_NEW_ROUND] = register_cvar("mapm_vote_in_new_round", "0"); // 0 - disable, 1 - enable
-	g_pCvars[LAST_ROUND] = register_cvar("mapm_last_round", "0"); //0 - disable, 1 - enable
-	g_pCvars[RESTORE_MAP_LIMITS] = register_cvar("mapm_restore_map_limit", "1"); //0 - disable, 1 - enable
-	g_pCvars[SHOW_PERCENT_AFTER_VOTE] = register_cvar("mapm_show_percent_after_vote", "0"); //0 - disable, 1 - enable
+	g_pCvars[LAST_ROUND] = register_cvar("mapm_last_round", "0"); // 0 - disable, 1 - enable
+	g_pCvars[RESTORE_MAP_LIMITS] = register_cvar("mapm_restore_map_limit", "1"); // 0 - disable, 1 - enable
+	g_pCvars[SHOW_PERCENT_AFTER_VOTE] = register_cvar("mapm_show_percent_after_vote", "0"); // 0 - always show, 1 - only after vote
 
 	g_pCvars[SECOND_VOTE] = register_cvar("mapm_second_vote", "0"); // 0 - disable, 1 - enable
 	g_pCvars[SECOND_VOTE_PERCENT] = register_cvar("mapm_second_vote_percent", "50");
@@ -214,12 +217,9 @@ public plugin_init()
 	g_pCvars[WINLIMIT] = get_cvar_pointer("mp_winlimit");
 	g_pCvars[TIMELIMIT] = get_cvar_pointer("mp_timelimit");
 	g_pCvars[FREEZETIME] = get_cvar_pointer("mp_freezetime");
+	g_pCvars[CHATTIME] = get_cvar_pointer("mp_chattime");
 
 	g_pCvars[NEXTMAP] = register_cvar("amx_nextmap", "", FCVAR_SERVER|FCVAR_EXTDLL|FCVAR_SPONLY);
-
-	#if defined FUNCTION_NEXTMAP
-	g_pCvars[CHATTIME] = get_cvar_pointer("mp_chattime");
-	#endif // FUNCTION_NEXTMAP
 
 	register_concmd("mapm_debug", "Command_Debug", ADMIN_MAP);
 	register_concmd("mapm_startvote", "Command_StartVote", ADMIN_MAP);
@@ -245,7 +245,7 @@ public plugin_init()
 	register_event("TextMsg", "Event_Restart", "a", "2=#Game_Commencing", "2=#Game_will_restart_in");
 
 	#if defined FUNCTION_NEXTMAP
-	register_event("30", "Event_Intermisson", "a");
+	register_event(_SVC_INTERMISSION, "Event_Intermission", "a");
 	#endif // FUNCTION_NEXTMAP
 
 	set_task(10.0, "Task_CheckTime", TASK_CHECKTIME, .flags = "b");
@@ -377,11 +377,14 @@ public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
 	if(file)
 	{
 		new map_info[MapsListStruct], text[48], map[MAP_NAME_LENGTH], min[3], max[3];
+
+		#if defined FUNCTION_NEXTMAP
 		new nextmap = false, founded_nextmap = false;
+		#endif // FUNCTION_NEXTMAP
 
 		#if defined FUNCTION_NOMINATION
 		new prefix[MAP_NAME_LENGTH];
-		#endif
+		#endif // FUNCTION_NOMINATION
 
 		while(!feof(file))
 		{
@@ -392,11 +395,19 @@ public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
 
 			if(!map[0] || map[0] == ';' || !valid_map(map) || is_map_in_array(map, load_night_maps, true)) continue;
 			
-			if((load_night_maps && g_bNight || !load_night_maps && !g_bNight) && equali(map, cur_map))
+			if(equali(map, cur_map))
 			{
-				nextmap = true;
+				#if defined FUNCTION_NEXTMAP
+				if(load_night_maps && g_bNight || !load_night_maps && !g_bNight)
+				{
+					nextmap = true;
+				}
+				#endif // FUNCTION_NEXTMAP
 				continue;
 			}
+
+			// TODO: If cur map is last in file then next is first in file
+			#if defined FUNCTION_NEXTMAP
 			if(nextmap)
 			{
 				nextmap = false;
@@ -404,6 +415,7 @@ public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
 				set_pcvar_string(g_pCvars[NEXTMAP], map);
 				server_print("founded nextmap: %s", map);
 			}
+			#endif // FUNCTION_NEXTMAP
 
 			#if defined FUNCTION_NOMINATION
 			if(get_map_prefix(map, prefix, charsmax(prefix)) && !is_prefix_in_array(prefix))
@@ -439,6 +451,7 @@ public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
 
 		g_iMapsListIndexes[load_night_maps ? NightListEnd : MapsListEnd] = size;
 
+		#if defined FUNCTION_NEXTMAP
 		if(!founded_nextmap && (load_night_maps && g_bNight || !load_night_maps && !g_bNight))
 		{
 			new start = load_night_maps ? g_iMapsListIndexes[NightListStart] : 0;
@@ -448,6 +461,7 @@ public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
 			set_pcvar_string(g_pCvars[NEXTMAP], map_info[m_MapName]);
 			server_print("don't found nextmap, random map: %s", map_info[m_MapName]);
 		}
+		#endif // FUNCTION_NEXTMAP
 	}
 }
 public plugin_end()
@@ -456,7 +470,6 @@ public plugin_end()
 	{
 		set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
 	}
-
 	restore_limits();
 }
 restore_limits()
@@ -478,8 +491,12 @@ restore_limits()
 		}
 		else
 		{
-			new restored_value = get_pcvar_num(g_pCvars[TIMELIMIT]) - g_iExtendedNum * get_pcvar_num(g_pCvars[EXTENDED_TIME]);
-			set_pcvar_num(g_pCvars[TIMELIMIT], restored_value);
+			new Float:timelimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
+			if(timelimit)
+			{
+				new Float:restored_value = timelimit - float(g_iExtendedNum * get_pcvar_num(g_pCvars[EXTENDED_TIME]));
+				set_pcvar_float(g_pCvars[TIMELIMIT], restored_value);
+			}
 		}
 		g_iExtendedNum = 0;
 	}
@@ -492,6 +509,9 @@ public client_disconnect(id)
 		clear_nominated_maps(id);
 	}
 	#endif
+	
+	// TODO: change to default map
+	// add more checks for tasks
 }
 public Task_CheckTime()
 {
@@ -502,7 +522,7 @@ public Task_CheckTime()
 	new Float:time_to_vote = get_pcvar_float(g_pCvars[TIMELEFT_TO_VOTE]);
 	
 	new timeleft = get_timeleft();
-	if(timeleft <= floatround(time_to_vote * 60.0))
+	if(timeleft <= floatround(time_to_vote * 60.0) && _get_players_num())
 	{
 		log_amx("SetVoteStart: timeleft %d", timeleft);
 		SetVoteStart();
@@ -553,11 +573,11 @@ public Event_Restart()
 }
 
 #if defined FUNCTION_NEXTMAP
-public Event_Intermisson()
+public Event_Intermission()
 {
 	new Float:chat_time = get_pcvar_float(g_pCvars[CHATTIME]);
 	set_pcvar_float(g_pCvars[CHATTIME], chat_time + 2.0);
-	set_task(chat_time, "DelayedChange");
+	set_task(chat_time, "DelayedChange", TASK_DELAYED_CHANGE);
 }
 public DelayedChange()
 {
@@ -652,11 +672,11 @@ public Show_NominationList(id, Array: array, size)
 		}
 	}
 	
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_BACK");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_BACK");
 	menu_setprop(menu, MPROP_BACKNAME, text);
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_NEXT");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_NEXT");
 	menu_setprop(menu, MPROP_NEXTNAME, text);
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_EXIT");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_EXIT");
 	menu_setprop(menu, MPROP_EXITNAME, text);
 	
 	menu_display(id, menu);
@@ -772,6 +792,8 @@ Show_MapsListMenu(id)
 	new start = g_bNight ? g_iMapsListIndexes[NightListStart] : 0;
 	new end = g_bNight ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
 	
+	// TODO: change disable by flag to disable by callback
+
 	for(new i = start, nominate_index; i < end; i++)
 	{
 		ArrayGetArray(g_aMapsList, i, map_info);
@@ -801,11 +823,11 @@ Show_MapsListMenu(id)
 			menu_additem(menu, map_info[m_MapName]);
 		}
 	}
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_BACK");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_BACK");
 	menu_setprop(menu, MPROP_BACKNAME, text);
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_NEXT");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_NEXT");
 	menu_setprop(menu, MPROP_NEXTNAME, text);
-	formatex(text, charsmax(text), "%L", LANG_PLAYER, "MAPM_MENU_EXIT");
+	formatex(text, charsmax(text), "%L", id, "MAPM_MENU_EXIT");
 	menu_setprop(menu, MPROP_EXITNAME, text);
 	
 	menu_display(id, menu);
@@ -930,13 +952,6 @@ public PrepareVote(second_vote)
 {
 	if(g_bVoteStarted) return 0;
 
-	new players_num = _get_players_num();
-
-	if(!players_num)
-	{
-		return 0;
-	}
-
 	if(second_vote)
 	{
 		// vote with 2 top voted maps
@@ -970,8 +985,8 @@ public PrepareVote(second_vote)
 	}
 
 	new Array:array_maps_range = ArrayCreate(VoteMenuStruct);
-	new map_info[MapsListStruct];
-	new vote_item_info[VoteMenuStruct];
+	new map_info[MapsListStruct], vote_item_info[VoteMenuStruct];
+	new players_num = _get_players_num();
 
 	for(new i = start; i < end; i++)
 	{
@@ -1124,20 +1139,18 @@ StartVote()
 {
 	new ret; ExecuteForward(g_hForward[_StartVote], ret);
 
-	//Show menu
-	//TODO: add option - show percent only after vote
-
 	//Start timer for end vote
 	g_iTimer = VOTE_TIME + 1;
 	Task_VoteTimer();
 }
 public Task_VoteTimer()
 {
+	new dont_show_result = get_pcvar_num(g_pCvars[SHOW_RESULT_TYPE]) == SHOW_DISABLED;
 	if(--g_iTimer > 0)
 	{
 		for(new id = 1; id < 33; id++)
 		{
-			if(!is_user_connected(id) || g_bPlayerVoted[id] && get_pcvar_num(g_pCvars[SHOW_RESULT_TYPE]) == SHOW_DISABLED) continue;
+			if(!is_user_connected(id) || dont_show_result && g_bPlayerVoted[id]) continue;
 
 			Show_VoteMenu(id);
 		}
@@ -1180,12 +1193,10 @@ public Show_VoteMenu(id)
 
 		if(item == g_iVoteItems)
 		{
-			len += formatex(menu[len], charsmax(menu) - len, "\y[%L]^n", id, "MAPM_MENU_EXTEND");
+			len += formatex(menu[len], charsmax(menu) - len, "\y[%L]", id, "MAPM_MENU_EXTEND");
 		}
-		else
-		{
-			len += formatex(menu[len], charsmax(menu) - len, "^n");
-		}
+		
+		len += formatex(menu[len], charsmax(menu) - len, "^n");
 	}
 
 	len += formatex(menu[len], charsmax(menu) - len, "^n\d%L \r%d\d %L", id, "MAPM_MENU_LEFT", g_iTimer, id, "MAPM_SECONDS");
@@ -1317,7 +1328,7 @@ FinishVote()
 			g_eVoteMenu[i - 1][v_Votes] = 0;
 		}
 		if(max_vote != 1) change_vote_items(max_vote, 1);
-
+		// TODO: Add ML
 		g_iTotalVotes = 0;
 		arrayset(g_bPlayerVoted, false, 33);
 
@@ -1357,6 +1368,7 @@ FinishVote()
 
 	if(get_pcvar_num(g_pCvars[LAST_ROUND]))
 	{
+		// What if timelimit 0?
 		g_fOldTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
 		set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
 		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_LASTROUND");

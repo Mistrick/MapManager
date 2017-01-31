@@ -47,6 +47,11 @@ public plugin_init()
 	#endif // FUNCTION_BLOCK_VOICE
 }
 
+public plugin_end()
+{
+	check_functions();
+}
+
 #if defined FUNCTION_BLOCK_CHAT
 public Hook_ChatMsg(id)
 {
@@ -140,7 +145,7 @@ public SetBlackScreenFade(fade)
 		default: { time = 4096; hold = 1024; flags = 2; }
 	}
 
-	message_begin(MSG_BROADCAST, msg_screen_fade);
+	message_begin(MSG_ALL, msg_screen_fade);
 	write_short(time);
 	write_short(hold);
 	write_short(flags);
