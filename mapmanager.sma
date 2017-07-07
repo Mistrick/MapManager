@@ -5,15 +5,16 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "3.0.0-160"
+#define VERSION "3.0.0-170"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
+#pragma dynamic 8192
 
 ///******** Settings ********///
 
 #define FUNCTION_NEXTMAP //replace default nextmap
-//#define FUNCTION_RTV
+#define FUNCTION_RTV
 #define FUNCTION_NOMINATION
 //#define FUNCTION_NIGHTMODE
 #define FUNCTION_BLOCK_MAPS
@@ -46,7 +47,7 @@ new const FILE_NIGHT_MAPS[] = "nightmaps.ini"; //configdir
 
 ///**************************///
 
-#define _SVC_INTERMISSION "30"
+#define EVENT_SVC_INTERMISSION "30"
 
 enum _:MapsListStruct
 {
@@ -100,6 +101,14 @@ enum Cvars
 	EXTENDED_MAX,
 	EXTENDED_TIME,
 	EXTENDED_ROUNDS,
+#if defined FUNCTION_RTV
+	ROCK_MODE,
+	ROCK_PERCENT,
+	ROCK_PLAYERS,
+	ROCK_CHANGE_TYPE,
+	ROCK_DELAY,
+	ROCK_ALLOW_EXTEND,
+#endif
 #if defined FUNCTION_NOMINATION
 	NOMINATION_DONT_CLOSE_MENU,
 	NOMINATION_DEL_NON_CUR_ONLINE,
@@ -128,18 +137,25 @@ enum (+=100)
 	TASK_DELAYED_CHANGE
 };
 
-enum
+enum _:ShowType
 {
 	SHOW_DISABLED,
 	SHOW_MENU,
 	SHOW_HUD
 };
 
-enum
+enum _:ChangeType
 {
 	CHANGE_AFTER_VOTE,
 	CHANGE_NEXT_ROUND,
 	CHANGE_MAP_END
+};
+
+enum _:NominationReturn
+{
+	NOMINATION_FAIL,
+	NOMINATION_SUCCESS,
+	NOMINATION_REMOVED
 };
 
 new g_pCvars[Cvars];
@@ -176,12 +192,19 @@ new Float:g_fOldTimeLimit;
 
 new bool:g_bVoteInNewRound;
 
+#if defined FUNCTION_RTV
+new g_bRtvPlayerVoted[33];
+new g_iRtvVotes;
+new g_bIsRtvVote;
+#endif
+
 #if defined FUNCTION_NOMINATION
 new Array:g_aNominationList;
 new g_iNominatedMaps[33];
 new g_iLastDenominate[33];
 new Array:g_aMapsPrefixes;
 new g_iMapsPrefixesNum;
+new g_hCallbackDisabled;
 #endif // FUNCTION_NOMINATION
 
 public plugin_init()
@@ -208,9 +231,18 @@ public plugin_init()
 	g_pCvars[EXTENDED_TIME] = register_cvar("mapm_extended_time", "15"); // minutes
 	g_pCvars[EXTENDED_ROUNDS] = register_cvar("mapm_extended_rounds", "3"); // rounds
 	
+	#if defined FUNCTION_RTV
+	g_pCvars[ROCK_MODE] = register_cvar("mapm_rtv_mode", "0"); // 0 - percents, 1 - players
+	g_pCvars[ROCK_PERCENT] = register_cvar("mapm_rtv_percent", "60");
+	g_pCvars[ROCK_PLAYERS] = register_cvar("mapm_rtv_players", "5");
+	g_pCvars[ROCK_CHANGE_TYPE] = register_cvar("mapm_rtv_change_type", "1"); // 0 - after vote, 1 - in round end
+	g_pCvars[ROCK_DELAY] = register_cvar("mapm_rtv_delay", "0"); // minutes
+	g_pCvars[ROCK_ALLOW_EXTEND] = register_cvar("mapm_rtv_allow_extend", "0"); // 0 - disable, 1 - enable
+	#endif
+
 	#if defined FUNCTION_NOMINATION
-	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mapm_nom_dont_close_menu", "0");// 0 - disable, 1 - enable
-	g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE] = register_cvar("mapm_nom_del_noncur_online", "0");// 0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DONT_CLOSE_MENU] = register_cvar("mapm_nom_dont_close_menu", "0"); // 0 - disable, 1 - enable
+	g_pCvars[NOMINATION_DEL_NON_CUR_ONLINE] = register_cvar("mapm_nom_del_noncur_online", "0"); // 0 - disable, 1 - enable
 	#endif
 
 	g_pCvars[MAXROUNDS] = get_cvar_pointer("mp_maxrounds");
@@ -224,6 +256,11 @@ public plugin_init()
 	register_concmd("mapm_debug", "Command_Debug", ADMIN_MAP);
 	register_concmd("mapm_startvote", "Command_StartVote", ADMIN_MAP);
 	register_concmd("mapm_stopvote", "Command_StopVote", ADMIN_MAP);
+
+	#if defined FUNCTION_RTV
+	register_clcmd("say rtv", "Command_RockTheVote");
+	register_clcmd("say /rtv", "Command_RockTheVote");
+	#endif
 
 	#if defined FUNCTION_NOMINATION
 	register_clcmd("say", "Command_Say");
@@ -245,7 +282,7 @@ public plugin_init()
 	register_event("TextMsg", "Event_Restart", "a", "2=#Game_Commencing", "2=#Game_will_restart_in");
 
 	#if defined FUNCTION_NEXTMAP
-	register_event(_SVC_INTERMISSION, "Event_Intermission", "a");
+	register_event(EVENT_SVC_INTERMISSION, "Event_Intermission", "a");
 	#endif // FUNCTION_NEXTMAP
 
 	set_task(10.0, "Task_CheckTime", TASK_CHECKTIME, .flags = "b");
@@ -257,22 +294,20 @@ public plugin_cfg()
 	#if defined FUNCTION_NOMINATION
 	g_aMapsPrefixes = ArrayCreate(MAP_NAME_LENGTH);
 	g_aNominationList = ArrayCreate(NominationStruct);
+	g_hCallbackDisabled = menu_makecallback("Callback_DisableItem");
 	#endif // FUNCTION_NOMINATION
-
-	
 
 	#if defined FUNCTION_BLOCK_MAPS
 	new Trie:trie_blocked_maps = TrieCreate();
 	LoadBlockedMaps(trie_blocked_maps);
-	#else
-	new Trie:trie_blocked_maps;
-	#endif // FUNCTION_BLOCK_MAPS
 
 	LoadMapFile(trie_blocked_maps, false);
 	LoadMapFile(trie_blocked_maps, true);
 
-	#if defined FUNCTION_BLOCK_MAPS
 	TrieDestroy(trie_blocked_maps);
+	#else
+	LoadMapFile(false);
+	LoadMapFile(true);
 	#endif // FUNCTION_BLOCK_MAPS
 
 	register_dictionary("mapmanager.txt");
@@ -356,7 +391,11 @@ LoadBlockedMaps(Trie:trie_blocked_maps)
 }
 #endif // FUNCTION_BLOCK_MAPS
 
+#if defined FUNCTION_BLOCK_MAPS
 public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
+#else
+public LoadMapFile(load_night_maps)
+#endif // FUNCTION_BLOCK_MAPS
 {
 	new file_path[128]; get_localinfo("amxx_configsdir", file_path, charsmax(file_path));
 	format(file_path, charsmax(file_path), "%s/%s", file_path, load_night_maps ? FILE_NIGHT_MAPS : FILE_MAPS);
@@ -510,6 +549,14 @@ public client_disconnect(id)
 	}
 	#endif
 	
+	#if defined FUNCTION_RTV
+	if(g_bRtvPlayerVoted[id])
+	{
+		g_bRtvPlayerVoted[id] = false;
+		g_iRtvVotes--;
+	}
+	#endif // FUNCTION_RTV
+
 	// TODO: change to default map
 	// add more checks for tasks
 }
@@ -576,26 +623,77 @@ public Event_Restart()
 public Event_Intermission()
 {
 	new Float:chat_time = get_pcvar_float(g_pCvars[CHATTIME]);
-	set_pcvar_float(g_pCvars[CHATTIME], chat_time + 2.0);
+	//set_pcvar_float(g_pCvars[CHATTIME], chat_time + 2.0);
 	set_task(chat_time, "DelayedChange", TASK_DELAYED_CHANGE);
 }
 public DelayedChange()
 {
 	new nextmap[MAP_NAME_LENGTH]; get_pcvar_string(g_pCvars[NEXTMAP], nextmap, charsmax(nextmap));
-	set_pcvar_float(g_pCvars[CHATTIME], get_pcvar_float(g_pCvars[CHATTIME]) - 2.0);
+	//set_pcvar_float(g_pCvars[CHATTIME], get_pcvar_float(g_pCvars[CHATTIME]) - 2.0);
 	server_cmd("changelevel %s", nextmap);
 }
 #endif // FUNCTION_NEXTMAP
 
+#if defined FUNCTION_RTV
+public Command_RockTheVote(id)
+{
+	if(g_bVoteFinished || g_bVoteStarted || g_bVoteInNewRound) return PLUGIN_HANDLED;
+	
+	/*
+	#if defined FUNCTION_NIGHTMODE
+	if(g_bNightMode && g_bNightModeOneMap)
+	{
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_NIGHT_NOT_AVAILABLE");
+		return PLUGIN_HANDLED;
+	}
+	#endif
+	*/
+	
+	new delay = get_pcvar_num(g_pCvars[ROCK_DELAY]) * 60 - (floatround(get_pcvar_float(g_pCvars[TIMELIMIT]) * 60.0) - get_timeleft());
+	if(delay > 0)
+	{
+		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_RTV_DELAY", delay / 60, delay % 60);
+		return PLUGIN_HANDLED;
+	}
+	
+	if(!g_bRtvPlayerVoted[id]) g_iRtvVotes++;
+	
+	new votes = (get_pcvar_num(g_pCvars[ROCK_MODE])) ? get_pcvar_num(g_pCvars[ROCK_PLAYERS]) - g_iRtvVotes : floatround(_get_players_num() * get_pcvar_num(g_pCvars[ROCK_PERCENT]) / 100.0, floatround_ceil) - g_iRtvVotes;
+	
+	if(votes <= 0)
+	{
+		g_bIsRtvVote = true;
+		SetVoteStart();
+		return PLUGIN_HANDLED;
+	}
+	
+	//new szVote[16];	get_ending(votes, "MAPM_VOTE1", "MAPM_VOTE2", "MAPM_VOTE3", szVote, charsmax(szVote));
+	
+	if(!g_bRtvPlayerVoted[id])
+	{
+		g_bRtvPlayerVoted[id] = true;		
+		
+		new name[33]; get_user_name(id, name, charsmax(name));
+		client_print_color(0, print_team_default, "%s^3 %L %L.", PREFIX, LANG_PLAYER, "MAPM_RTV_VOTED", name, votes, LANG_PLAYER, "MAPM_VOTES");
+	}
+	else
+	{
+		client_print_color(id, print_team_default, "%s^1 %L %L.", PREFIX, id, "MAPM_RTV_ALREADY_VOTED", votes, id, "MAPM_VOTES");
+	}
+	
+	return PLUGIN_HANDLED;
+}
+#endif // FUNCTION_RTV
+
 #if defined FUNCTION_NOMINATION
 public Command_Say(id)
 {
-	if(g_bVoteStarted || g_bVoteFinished) return;
+	if(g_bVoteStarted || g_bVoteFinished) return PLUGIN_CONTINUE;
 	
 	new text[MAP_NAME_LENGTH]; read_args(text, charsmax(text));
 	remove_quotes(text); trim(text); strtolower(text);
 	
-	if(string_with_space(text)) return;
+	if(string_with_space(text)) return PLUGIN_CONTINUE;
 	
 	new map_index = is_map_in_array(text, g_bNight);
 	
@@ -632,6 +730,8 @@ public Command_Say(id)
 		
 		ArrayDestroy(array_nominate_list);
 	}
+
+	return PLUGIN_CONTINUE;
 }
 public Show_NominationList(id, Array: array, size)
 {
@@ -650,7 +750,7 @@ public Show_NominationList(id, Array: array, size)
 		if(map_info[m_BlockCount])
 		{
 			formatex(item_info, charsmax(item_info), "%s[\r%d\d]", map_info[m_MapName], map_info[m_BlockCount]);
-			menu_additem(menu, item_info, str_num, (1 << 31));
+			menu_additem(menu, item_info, str_num, _, g_hCallbackDisabled);
 		}
 		else if(nominate_index)
 		{
@@ -663,7 +763,7 @@ public Show_NominationList(id, Array: array, size)
 			else
 			{
 				formatex(item_info, charsmax(item_info), "%s[\y*\d]", map_info[m_MapName]);
-				menu_additem(menu, item_info, str_num, (1 << 31));
+				menu_additem(menu, item_info, str_num, _, g_hCallbackDisabled);
 			}
 		}
 		else
@@ -696,14 +796,14 @@ public NominationList_Handler(id, menu, item)
 	trim_bracket(item_name);
 	new is_map_nominated = NominateMap(id, item_name, map_index);
 	
-	if(is_map_nominated == 2 || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
+	if(is_map_nominated == NOMINATION_REMOVED || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
 	{
-		if(is_map_nominated == 1)
+		if(is_map_nominated == NOMINATION_SUCCESS)
 		{
 			new item_info[48]; formatex(item_info, charsmax(item_info), "%s[\y*\w]", item_name);
 			menu_item_setname(menu, item, item_info);
 		}
-		else if(is_map_nominated == 2)
+		else if(is_map_nominated == NOMINATION_REMOVED)
 		{
 			menu_item_setname(menu, item, item_name);
 		}
@@ -724,7 +824,7 @@ NominateMap(id, map[MAP_NAME_LENGTH], map_index)
 	if(map_info[m_BlockCount])
 	{
 		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_NOM_NOT_AVAILABLE_MAP");
-		return 0;
+		return NOMINATION_FAIL;
 	}
 	#endif
 	
@@ -745,19 +845,19 @@ NominateMap(id, map[MAP_NAME_LENGTH], map_index)
 				ArrayDeleteItem(g_aNominationList, nominate_index - 1);
 				
 				client_print_color(0, id, "%s^3 %L", PREFIX, LANG_PLAYER, "MAPM_NOM_REMOVE_NOM", name, map);
-				return 2;
+				return NOMINATION_REMOVED;
 			}
 			client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_NOM_SPAM");
-			return 0;
+			return NOMINATION_FAIL;
 		}
 		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_NOM_ALREADY_NOM");
-		return 0;
+		return NOMINATION_FAIL;
 	}
 	
 	if(g_iNominatedMaps[id] >= NOMINATED_MAPS_PER_PLAYER)
 	{
 		client_print_color(id, print_team_default, "%s^1 %L", PREFIX, id, "MAPM_NOM_CANT_NOM");
-		return 0;
+		return NOMINATION_FAIL;
 	}
 	
 	nom_info[n_MapName] = map;
@@ -777,7 +877,7 @@ NominateMap(id, map[MAP_NAME_LENGTH], map_index)
 		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_PLAYER, "MAPM_NOM_MAP", name, map);
 	}
 	
-	return 1;
+	return NOMINATION_SUCCESS;
 }
 public Command_MapsList(id)
 {
@@ -791,8 +891,6 @@ Show_MapsListMenu(id)
 	new map_info[MapsListStruct], item_info[48];
 	new start = g_bNight ? g_iMapsListIndexes[NightListStart] : 0;
 	new end = g_bNight ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
-	
-	// TODO: change disable by flag to disable by callback
 
 	for(new i = start, nominate_index; i < end; i++)
 	{
@@ -802,7 +900,7 @@ Show_MapsListMenu(id)
 		if(map_info[m_BlockCount])
 		{
 			formatex(item_info, charsmax(item_info), "%s[\r%d\d]", map_info[m_MapName], map_info[m_BlockCount]);
-			menu_additem(menu, item_info, _, (1 << 31));
+			menu_additem(menu, item_info, _, _, g_hCallbackDisabled);
 		}
 		else if(nominate_index)
 		{
@@ -815,7 +913,7 @@ Show_MapsListMenu(id)
 			else
 			{
 				formatex(item_info, charsmax(item_info), "%s[\y*\d]", map_info[m_MapName]);
-				menu_additem(menu, item_info, _, (1 << 31));
+				menu_additem(menu, item_info, _, _, g_hCallbackDisabled);
 			}
 		}
 		else
@@ -849,12 +947,12 @@ public MapsListMenu_Handler(id, menu, item)
 	
 	if(g_iNominatedMaps[id] < NOMINATED_MAPS_PER_PLAYER || get_pcvar_num(g_pCvars[NOMINATION_DONT_CLOSE_MENU]))
 	{
-		if(is_map_nominated == 1)
+		if(is_map_nominated == NOMINATION_SUCCESS)
 		{
 			new new_item_info[48]; formatex(new_item_info, charsmax(new_item_info), "%s[\y*\w]", item_name);
 			menu_item_setname(menu, item, new_item_info);
 		}
-		else if(is_map_nominated == 2)
+		else if(is_map_nominated == NOMINATION_REMOVED)
 		{
 			menu_item_setname(menu, item, item_name);
 		}
@@ -866,6 +964,10 @@ public MapsListMenu_Handler(id, menu, item)
 	}
 	
 	return PLUGIN_HANDLED;
+}
+public Callback_DisableItem()
+{
+	return ITEM_DISABLED;
 }
 #endif // FUNCTION_NOMINATION
 
@@ -904,7 +1006,8 @@ public Command_StartVote(id, flag)
 
 	SetVoteStart();
 
-	//TODO: log this
+	new name[32]; get_user_name(id, name, charsmax(name));
+	log_amx("MapManager: Vote started by %s.", id ? name : "Server");
 
 	return PLUGIN_HANDLED;
 }
@@ -912,7 +1015,6 @@ public Command_StopVote(id, flag)
 {
 	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
 
-	//TODO: log this
 	if(g_bVoteStarted)
 	{
 		new ret; ExecuteForward(g_hForward[_StopVote], ret);
@@ -924,7 +1026,7 @@ public Command_StopVote(id, flag)
 
 		new name[32]; get_user_name(id, name, charsmax(name));
 		client_print_color(0, id, "%s^3 %L", PREFIX, LANG_PLAYER, "MAPM_CANCEL_VOTE", id ? name : "Server");
-		log_amx("StopVote: %s canceled vote.", name);
+		log_amx("MapManager: Vote canceled by %s.", id ? name : "Server");
 	}
 
 	return PLUGIN_HANDLED;
@@ -971,6 +1073,9 @@ public PrepareVote(second_vote)
 
 	reset_vote_values();
 
+	// TODO: add permament maps list
+	// always in menu
+	
 	// standart vote
 	new start = (g_bNight) ? g_iMapsListIndexes[NightListStart] : 0;
 	new end = (g_bNight) ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
@@ -1092,7 +1197,14 @@ allow_map_extend()
 	new Float:timelimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
 	new round_check = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
 
-	if(get_pcvar_num(g_pCvars[EXTENDED_MAX]) > g_iExtendedNum && (timelimit > 0.0 || g_bVoteInNewRound && timelimit == 0.0 || round_check))
+	#if defined FUNCTION_RTV
+	if(g_bIsRtvVote && get_pcvar_num(g_pCvars[ROCK_ALLOW_EXTEND])
+		&& get_pcvar_num(g_pCvars[EXTENDED_MAX]) > g_iExtendedNum
+		&& (timelimit > 0.0 || g_bVoteInNewRound && timelimit == 0.0 || round_check))
+	#else
+	if(get_pcvar_num(g_pCvars[EXTENDED_MAX]) > g_iExtendedNum
+		&& (timelimit > 0.0 || g_bVoteInNewRound && timelimit == 0.0 || round_check))
+	#endif
 	{
 		allowed = 1;
 	}
@@ -1106,9 +1218,13 @@ reset_vote_values()
 		g_eVoteMenu[i][v_MapIndex] = -1;
 		g_eVoteMenu[i][v_Votes] = 0;
 	}
-	arrayset(g_bPlayerVoted, false, 33);
+	arrayset(g_bPlayerVoted, false, sizeof(g_bPlayerVoted));
 	g_iTotalVotes = 0;
-	//TODO: Add reset for rtv
+
+	#if defined FUNCTION_RTV
+	arrayset(g_bRtvPlayerVoted, false, sizeof(g_bRtvPlayerVoted));
+	g_iRtvVotes = 0;
+	#endif // FUNCTION_RTV
 }
 StartTimerTask()
 {
@@ -1252,8 +1368,6 @@ public VoteMenu_Handler(id, key)
 }
 FinishVote()
 {
-	new ret; ExecuteForward(g_hForward[_FinishVote], ret);
-
 	g_bVoteStarted = false;
 	g_bVoteFinished = true;
 
@@ -1328,10 +1442,11 @@ FinishVote()
 			g_eVoteMenu[i - 1][v_Votes] = 0;
 		}
 		if(max_vote != 1) change_vote_items(max_vote, 1);
-		// TODO: Add ML
-		g_iTotalVotes = 0;
-		arrayset(g_bPlayerVoted, false, 33);
 
+		g_iTotalVotes = 0;
+		arrayset(g_bPlayerVoted, false, sizeof(g_bPlayerVoted));
+		
+		// TODO: Add ML
 		client_print_color(0, print_team_default, "%s^1 Second vote will start in %d seconds.", PREFIX, get_pcvar_num(g_pCvars[SECOND_VOTE_DELAY]));
 
 		set_task(get_pcvar_float(g_pCvars[SECOND_VOTE_DELAY]), "PrepareVote", true);
@@ -1372,6 +1487,8 @@ FinishVote()
 		g_fOldTimeLimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
 		set_pcvar_float(g_pCvars[TIMELIMIT], 0.0);
 		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_LASTROUND");
+		
+		server_print("last round cvar: saved timelimit is %f", g_fOldTimeLimit);
 	}
 	else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_AFTER_VOTE)
 	{
@@ -1383,7 +1500,9 @@ FinishVote()
 	{
 		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_MAP_CHANGE_NEXTROUND");
 	}
-
+	
+	new ret; ExecuteForward(g_hForward[_FinishVote], ret);
+	
 	return 1;
 }
 stock valid_map(map[])
