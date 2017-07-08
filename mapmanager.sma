@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "3.0.0-172"
+#define VERSION "3.0.0-173"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -16,12 +16,12 @@
 #define FUNCTION_NEXTMAP //replace default nextmap
 #define FUNCTION_RTV
 #define FUNCTION_NOMINATION
-//#define FUNCTION_NIGHTMODE
+// #define FUNCTION_NIGHTMODE
 #define FUNCTION_BLOCK_MAPS
 
 #define SELECT_MAPS 5
-#define PRE_START_TIME 3
-#define VOTE_TIME 5
+#define PRE_START_TIME 5
+#define VOTE_TIME 10
 
 #define NOMINATED_MAPS_IN_VOTE 3
 #define NOMINATED_MAPS_PER_PLAYER 3
@@ -57,13 +57,6 @@ enum _:MapsListStruct
 	m_BlockCount
 };
 
-enum MapsListIndexes
-{
-	MapsListEnd,
-	NightListStart,
-	NightListEnd
-};
-
 enum _:NominationStruct
 {
 	n_MapName[MAP_NAME_LENGTH],
@@ -94,6 +87,7 @@ enum Cvars
 	LAST_ROUND,
 	RESTORE_MAP_LIMITS,
 	SHOW_PERCENT_AFTER_VOTE,
+	HIGHLIGHT_SELECTED_ITEM,
 	SECOND_VOTE,
 	SECOND_VOTE_PERCENT,
 	SECOND_VOTE_DELAY,
@@ -168,9 +162,9 @@ new g_pCvars[Cvars];
 new g_hForward[Forwards];
 
 new Array:g_aMapsList;
-new g_iMapsListIndexes[MapsListIndexes];
+new g_iMapsListSize;
 
-new g_iBlockedMaps[BlockLists];
+new g_iBlockedMaps;
 
 new bool:g_bVoteStarted;
 new bool:g_bVoteFinished;
@@ -183,7 +177,9 @@ new g_iTimer;
 
 new bool:g_bNight;
 
+new bool:g_bShowPercent;
 new bool:g_bPlayerVoted[33];
+new g_iSelectedItem[33];
 
 new g_szCurMap[MAP_NAME_LENGTH];
 
@@ -227,6 +223,7 @@ public plugin_init()
 	g_pCvars[LAST_ROUND] = register_cvar("mapm_last_round", "0"); // 0 - disable, 1 - enable
 	g_pCvars[RESTORE_MAP_LIMITS] = register_cvar("mapm_restore_map_limit", "1"); // 0 - disable, 1 - enable
 	g_pCvars[SHOW_PERCENT_AFTER_VOTE] = register_cvar("mapm_show_percent_after_vote", "0"); // 0 - always show, 1 - only after vote
+	g_pCvars[HIGHLIGHT_SELECTED_ITEM] = register_cvar("mapm_highlight_selected_item", "1"); // 0 - disable, 1 - enable
 
 	g_pCvars[SECOND_VOTE] = register_cvar("mapm_second_vote", "0"); // 0 - disable, 1 - enable
 	g_pCvars[SECOND_VOTE_PERCENT] = register_cvar("mapm_second_vote_percent", "50");
@@ -304,6 +301,8 @@ public plugin_cfg()
 {
 	g_aMapsList = ArrayCreate(MapsListStruct);
 
+	g_bNight = is_night();
+	
 	#if defined FUNCTION_NOMINATION
 	g_aMapsPrefixes = ArrayCreate(MAP_NAME_LENGTH);
 	g_aNominationList = ArrayCreate(NominationStruct);
@@ -314,13 +313,11 @@ public plugin_cfg()
 	new Trie:trie_blocked_maps = TrieCreate();
 	LoadBlockedMaps(trie_blocked_maps);
 
-	LoadMapFile(trie_blocked_maps, false);
-	LoadMapFile(trie_blocked_maps, true);
+	LoadMapFile(g_bNight? FILE_NIGHT_MAPS : FILE_MAPS, trie_blocked_maps);
 
 	TrieDestroy(trie_blocked_maps);
 	#else
-	LoadMapFile(false);
-	LoadMapFile(true);
+	LoadMapFile(g_bNight ? FILE_MAPS : FILE_NIGHT_MAPS);
 	#endif // FUNCTION_BLOCK_MAPS
 
 	register_dictionary("mapmanager.txt");
@@ -338,6 +335,16 @@ public plugin_cfg()
 		log_amx("MapManager: nextmap.amxx has been stopped.");
 	}
 	#endif // FUNCTION_NEXTMAP
+}
+
+bool:is_night()
+{
+	#if defined FUNCTION_NIGHTMODE
+	// TODO: all stuff for night mode
+	return false;
+	#else
+	return false;
+	#endif
 }
 
 #if defined FUNCTION_BLOCK_MAPS
@@ -405,22 +412,17 @@ LoadBlockedMaps(Trie:trie_blocked_maps)
 #endif // FUNCTION_BLOCK_MAPS
 
 #if defined FUNCTION_BLOCK_MAPS
-public LoadMapFile(Trie:trie_blocked_maps, load_night_maps)
+public LoadMapFile(const file[], Trie:trie_blocked_maps)
 #else
-public LoadMapFile(load_night_maps)
+public LoadMapFile(const file[])
 #endif // FUNCTION_BLOCK_MAPS
 {
 	new file_path[128]; get_localinfo("amxx_configsdir", file_path, charsmax(file_path));
-	format(file_path, charsmax(file_path), "%s/%s", file_path, load_night_maps ? FILE_NIGHT_MAPS : FILE_MAPS);
+	format(file_path, charsmax(file_path), "%s/%s", file_path, file);
 
-	if(!load_night_maps && !file_exists(file_path))
+	if(!file_exists(file_path))
 	{
 		set_fail_state("Maps file doesn't exist.");
-	}
-
-	if(load_night_maps)
-	{
-		g_iMapsListIndexes[NightListStart] = ArraySize(g_aMapsList);
 	}
 
 	new cur_map[MAP_NAME_LENGTH]; get_mapname(cur_map, charsmax(cur_map));
@@ -431,7 +433,7 @@ public LoadMapFile(load_night_maps)
 		new map_info[MapsListStruct], text[48], map[MAP_NAME_LENGTH], min[3], max[3];
 
 		#if defined FUNCTION_NEXTMAP
-		new nextmap = false, founded_nextmap = false;
+		new nextmap = false, founded_nextmap = false, first_map[32];
 		#endif // FUNCTION_NEXTMAP
 
 		#if defined FUNCTION_NOMINATION
@@ -445,15 +447,19 @@ public LoadMapFile(load_night_maps)
 			
 			strtolower(map);
 
-			if(!map[0] || map[0] == ';' || !valid_map(map) || is_map_in_array(map, load_night_maps, true)) continue;
+			if(!map[0] || map[0] == ';' || !valid_map(map) || is_map_in_array(map)) continue;
+			
+			#if defined FUNCTION_NEXTMAP
+			if(!first_map[0])
+			{
+				copy(first_map, charsmax(first_map), map);
+			}
+			#endif
 			
 			if(equali(map, cur_map))
 			{
 				#if defined FUNCTION_NEXTMAP
-				if(load_night_maps && g_bNight || !load_night_maps && !g_bNight)
-				{
-					nextmap = true;
-				}
+				nextmap = true;
 				#endif // FUNCTION_NEXTMAP
 				continue;
 			}
@@ -485,33 +491,26 @@ public LoadMapFile(load_night_maps)
 			if(TrieKeyExists(trie_blocked_maps, map))
 			{
 				TrieGetCell(trie_blocked_maps, map, map_info[m_BlockCount]);
-				g_iBlockedMaps[load_night_maps ? NightList : DayList]++;
+				g_iBlockedMaps++;
 			}
 			#endif // FUNCTION_BLOCK_MAPS
 
 			ArrayPushArray(g_aMapsList, map_info);
 			min = ""; max = ""; map_info[m_BlockCount] = 0;
+			g_iMapsListSize++;
 		}
 		fclose(file);
-		
-		new size = ArraySize(g_aMapsList);
 
-		if(!load_night_maps && size == 0)
+		if(g_iMapsListSize == 0)
 		{
 			set_fail_state("Nothing loaded from file.");
 		}
 
-		g_iMapsListIndexes[load_night_maps ? NightListEnd : MapsListEnd] = size;
-
 		#if defined FUNCTION_NEXTMAP
-		if(!founded_nextmap && (load_night_maps && g_bNight || !load_night_maps && !g_bNight))
+		if(!founded_nextmap)
 		{
-			new start = load_night_maps ? g_iMapsListIndexes[NightListStart] : 0;
-			new end = load_night_maps ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
-			new random_map = random_num(start, end - 1);
-			ArrayGetArray(g_aMapsList, random_map, map_info);
-			set_pcvar_string(g_pCvars[NEXTMAP], map_info[m_MapName]);
-			server_print("don't found nextmap, random map: %s", map_info[m_MapName]);
+			set_pcvar_string(g_pCvars[NEXTMAP], first_map);
+			server_print("founded nextmap: %s (first in file)", first_map);
 		}
 		#endif // FUNCTION_NEXTMAP
 	}
@@ -725,7 +724,7 @@ public Command_Say(id)
 	
 	if(string_with_space(text)) return PLUGIN_CONTINUE;
 	
-	new map_index = is_map_in_array(text, g_bNight);
+	new map_index = is_map_in_array(text);
 	
 	if(map_index)
 	{
@@ -738,7 +737,7 @@ public Command_Say(id)
 		{
 			ArrayGetString(g_aMapsPrefixes, i, prefix, charsmax(prefix));
 			formatex(buffer, charsmax(buffer), "%s%s", prefix, text);
-			map_index = g_bNight ? g_iMapsListIndexes[NightListStart] : 0;
+			map_index = 0;
 			while((map_index = find_similar_map(map_index, buffer)))
 			{
 				ArrayPushCell(array_nominate_list, map_index - 1);
@@ -919,10 +918,9 @@ Show_MapsListMenu(id)
 	new menu = menu_create(text, "MapsListMenu_Handler");
 	
 	new map_info[MapsListStruct], item_info[48];
-	new start = g_bNight ? g_iMapsListIndexes[NightListStart] : 0;
-	new end = g_bNight ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
+	new end = g_iMapsListSize;
 
-	for(new i = start, nominate_index; i < end; i++)
+	for(new i = 0, nominate_index; i < end; i++)
 	{
 		ArrayGetArray(g_aMapsList, i, map_info);
 		nominate_index = is_map_nominated(i);
@@ -1007,13 +1005,7 @@ public Command_Debug(id, flag)
 
 	console_print(id, "^nLoaded maps:");	
 	new map_info[MapsListStruct];
-	for(new i; i < g_iMapsListIndexes[MapsListEnd]; i++)
-	{
-		ArrayGetArray(g_aMapsList, i, map_info);
-		console_print(id, "%3d ^t%32s ^t%d^t%d^t%d", i + 1, map_info[m_MapName], map_info[m_MinPlayers], map_info[m_MaxPlayers], map_info[m_BlockCount]);
-	}
-	console_print(id, "Night maps:");
-	for(new i = g_iMapsListIndexes[NightListStart]; i < g_iMapsListIndexes[NightListEnd]; i++)
+	for(new i; i < g_iMapsListSize; i++)
 	{
 		ArrayGetArray(g_aMapsList, i, map_info);
 		console_print(id, "%3d ^t%32s ^t%d^t%d^t%d", i + 1, map_info[m_MapName], map_info[m_MinPlayers], map_info[m_MaxPlayers], map_info[m_BlockCount]);
@@ -1136,6 +1128,8 @@ public PrepareVote(second_vote)
 {
 	if(g_bVoteStarted) return 0;
 
+	arrayset(g_iSelectedItem, -1, sizeof(g_iSelectedItem));
+	
 	if(second_vote)
 	{
 		// vote with 2 top voted maps
@@ -1159,11 +1153,10 @@ public PrepareVote(second_vote)
 	// always in menu
 	
 	// standart vote
-	new start = (g_bNight) ? g_iMapsListIndexes[NightListStart] : 0;
-	new end = (g_bNight) ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
+	new end = g_iMapsListSize;
 
 	new items = 0;
-	new menu_max_items = min(min(end - start - g_iBlockedMaps[g_bNight ? NightList : DayList], SELECT_MAPS), MAX_ITEMS);
+	new menu_max_items = min(min(end - g_iBlockedMaps, SELECT_MAPS), MAX_ITEMS);
 
 	if(menu_max_items <= 0)
 	{
@@ -1175,7 +1168,7 @@ public PrepareVote(second_vote)
 	new map_info[MapsListStruct], vote_item_info[VoteMenuStruct];
 	new players_num = _get_players_num();
 
-	for(new i = start; i < end; i++)
+	for(new i = 0; i < end; i++)
 	{
 		ArrayGetArray(g_aMapsList, i, map_info);
 
@@ -1247,7 +1240,7 @@ public PrepareVote(second_vote)
 		for(new random_map; items < menu_max_items; items++)
 		{
 			do {
-				random_map = random_num(start, end - 1);
+				random_map = random_num(0, end - 1);
 				ArrayGetArray(g_aMapsList, random_map, map_info);
 			} while(map_info[m_BlockCount] || is_map_in_menu(random_map));
 
@@ -1346,7 +1339,7 @@ public Task_VoteTimer()
 	if(--g_iTimer > 0)
 	{
 		new dont_show_result = get_pcvar_num(g_pCvars[SHOW_RESULT_TYPE]) == SHOW_DISABLED;
-		new show_percent = get_pcvar_num(g_pCvars[SHOW_PERCENT_AFTER_VOTE]);
+		g_bShowPercent = bool:get_pcvar_num(g_pCvars[SHOW_PERCENT_AFTER_VOTE]);
 		
 		new players[32], pnum; get_players(players, pnum, "ch");
 		for(new i, id; i < pnum; i++)
@@ -1354,7 +1347,7 @@ public Task_VoteTimer()
 			id = players[i];
 			if(!dont_show_result || !g_bPlayerVoted[id])
 			{
-				Show_VoteMenu(id, show_percent);
+				Show_VoteMenu(id);
 			}
 		}
 		set_task(1.0, "Task_VoteTimer", TASK_TIMER);
@@ -1365,12 +1358,12 @@ public Task_VoteTimer()
 		FinishVote();
 	}
 }
-public Show_VoteMenu(id, show_percent)
+public Show_VoteMenu(id)
 {
 	static menu[512];
 	new len, keys, percent, item;
 
-	new allow_percent = !show_percent || show_percent && g_bPlayerVoted[id];
+	new bool:allow_percent = !g_bShowPercent || g_bShowPercent && g_bPlayerVoted[id];
 	
 	len = formatex(menu, charsmax(menu), "\y%L:^n^n", id, g_bPlayerVoted[id] ? "MAPM_MENU_VOTE_RESULTS" : "MAPM_MENU_CHOOSE_MAP");
 	
@@ -1386,7 +1379,7 @@ public Show_VoteMenu(id, show_percent)
 		else
 		{
 			//TODO: add highlight for selected item
-			len += formatex(menu[len], charsmax(menu) - len, "\d%s", g_eVoteMenu[item][v_MapName]);
+			len += formatex(menu[len], charsmax(menu) - len, "%s%s", (item == g_iSelectedItem[id]) ? "\r" : "\d", g_eVoteMenu[item][v_MapName]);
 		}
 
 		if(allow_percent)
@@ -1430,6 +1423,7 @@ public VoteMenu_Handler(id, key)
 		return PLUGIN_HANDLED;
 	}
 	
+	g_iSelectedItem[id] = key;
 	g_eVoteMenu[key][v_Votes]++;
 	g_iTotalVotes++;
 	g_bPlayerVoted[id] = true;
@@ -1456,10 +1450,13 @@ public VoteMenu_Handler(id, key)
 }
 FinishVote()
 {
+	new ret; ExecuteForward(g_hForward[_FinishVote], ret);
+	
 	g_bVoteStarted = false;
 	g_bVoteFinished = true;
 
 	server_print("Vote finished");
+	
 	//Check votes
 	new max_vote = 0;
 	for(new i = 1; i < g_iVoteItems + 1; i++)
@@ -1475,8 +1472,7 @@ FinishVote()
 		g_iExtendedNum++;
 
 		#if defined FUNCTION_RTV
-		arrayset(g_bRtvPlayerVoted, false, sizeof(g_bRtvPlayerVoted));
-		g_iRtvVotes = 0;
+		
 		#endif // FUNCTION_RTV
 
 		if(g_fOldTimeLimit > 0.0)
@@ -1484,7 +1480,20 @@ FinishVote()
 			set_pcvar_float(g_pCvars[TIMELIMIT], g_fOldTimeLimit);
 			g_fOldTimeLimit = 0.0;
 		}
-
+		
+		#if defined FUNCTION_RTV
+		arrayset(g_bRtvPlayerVoted, false, sizeof(g_bRtvPlayerVoted));
+		g_iRtvVotes = 0;
+		
+		if(g_bIsRtvVote && get_pcvar_num(g_pCvars[ROCK_ALLOW_EXTEND]))
+		{
+			g_bIsRtvVote = false;
+			// TODO: add ML
+			client_print_color(0, print_team_default, "%s^1 Continue playing on current map.");
+			return 1;
+		}
+		#endif // FUNCTION_RTV
+		
 		new win_limit = get_pcvar_num(g_pCvars[WINLIMIT]);
 		new max_rounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
 
@@ -1511,6 +1520,10 @@ FinishVote()
 			set_pcvar_float(g_pCvars[TIMELIMIT], get_pcvar_float(g_pCvars[TIMELIMIT]) + float(min));
 		}
 
+		#if defined FUNCTION_RTV
+		g_bIsRtvVote = false;
+		#endif // FUNCTION_RTV
+		
 		server_print("map extended");
 		return 1;
 	}
@@ -1581,18 +1594,30 @@ FinishVote()
 		
 		server_print("last round cvar: saved timelimit is %f", g_fOldTimeLimit);
 	}
+	#if defined FUNCTION_RTV
+	else if(g_bIsRtvVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == CHANGE_NEXT_ROUND 
+			|| get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_NEXT_ROUND)
+	#else
+	else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_NEXT_ROUND)
+	#endif // FUNCTION_RTV
+	{
+		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_MAP_CHANGE_NEXTROUND");
+	}
+	#if defined FUNCTION_RTV
+	else if(g_bIsRtvVote && get_pcvar_num(g_pCvars[ROCK_CHANGE_TYPE]) == CHANGE_AFTER_VOTE 
+			|| get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_AFTER_VOTE)
+	#else
 	else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_AFTER_VOTE)
+	#endif // FUNCTION_RTV
 	{
 		new sec = get_pcvar_num(g_pCvars[CHATTIME]);
 		client_print_color(0, print_team_default, "%s^1 %L^1 %L.", PREFIX, LANG_PLAYER, "MAPM_MAP_CHANGE", sec, LANG_PLAYER, "MAPM_SECONDS");
 		Intermission();
 	}
-	else if(get_pcvar_num(g_pCvars[CHANGE_TYPE]) == CHANGE_NEXT_ROUND)
-	{
-		client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_MAP_CHANGE_NEXTROUND");
-	}
 	
-	new ret; ExecuteForward(g_hForward[_FinishVote], ret);
+	#if defined FUNCTION_RTV
+	g_bIsRtvVote = false;
+	#endif // FUNCTION_RTV
 	
 	return 1;
 }
@@ -1612,12 +1637,10 @@ stock valid_map(map[])
 	
 	return false;
 }
-is_map_in_array(map[], night_maps, load = false)
+is_map_in_array(map[])
 {
-	new start = night_maps ? g_iMapsListIndexes[NightListStart] : 0;
-	new end = (night_maps || load) ? ArraySize(g_aMapsList) : g_iMapsListIndexes[MapsListEnd];
 	new map_info[MapsListStruct];
-	for(new i = start; i < end; i++)
+	for(new i = 0; i < g_iMapsListSize; i++)
 	{
 		ArrayGetArray(g_aMapsList, i, map_info);
 		if(equali(map, map_info[m_MapName])) return i + 1;
@@ -1717,7 +1740,7 @@ clear_nominated_maps(id)
 find_similar_map(map_index, string[MAP_NAME_LENGTH])
 {
 	new map_info[MapsListStruct];
-	new end = g_bNight ? g_iMapsListIndexes[NightListEnd] : g_iMapsListIndexes[MapsListEnd];
+	new end = g_iMapsListSize;
 
 	for(new i = map_index; i < end; i++)
 	{
