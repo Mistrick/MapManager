@@ -5,7 +5,7 @@
 #endif
 
 #define PLUGIN "Map Manager"
-#define VERSION "3.0.0-170"
+#define VERSION "3.0.0-172"
 #define AUTHOR "Mistrick"
 
 #pragma semicolon 1
@@ -151,6 +151,12 @@ enum _:ChangeType
 	CHANGE_MAP_END
 };
 
+enum _:ExtendedType
+{
+	EXTEND_MINUTES,
+	EXTEND_ROUNDS
+};
+
 enum _:NominationReturn
 {
 	NOMINATION_FAIL,
@@ -257,11 +263,18 @@ public plugin_init()
 	register_concmd("mapm_startvote", "Command_StartVote", ADMIN_MAP);
 	register_concmd("mapm_stopvote", "Command_StopVote", ADMIN_MAP);
 
+	register_clcmd("say timeleft", "Command_Timeleft");
+	
 	#if defined FUNCTION_RTV
 	register_clcmd("say rtv", "Command_RockTheVote");
 	register_clcmd("say /rtv", "Command_RockTheVote");
-	#endif
+	#endif // FUNCTION_RTV
 
+	#if defined FUNCTION_NEXTMAP
+	register_clcmd("say nextmap", "Command_Nextmap");
+	register_clcmd("say currentmap", "Command_CurrentMap");
+	#endif // FUNCTION_NEXTMAP
+	
 	#if defined FUNCTION_NOMINATION
 	register_clcmd("say", "Command_Say");
 	register_clcmd("say_team", "Command_Say");
@@ -280,7 +293,7 @@ public plugin_init()
 	register_event("TeamScore", "Event_TeamScore", "a");
 	register_event("HLTV", "Event_NewRound", "a", "1=0", "2=0");
 	register_event("TextMsg", "Event_Restart", "a", "2=#Game_Commencing", "2=#Game_will_restart_in");
-
+	
 	#if defined FUNCTION_NEXTMAP
 	register_event(EVENT_SVC_INTERMISSION, "Event_Intermission", "a");
 	#endif // FUNCTION_NEXTMAP
@@ -515,7 +528,7 @@ restore_limits()
 {
 	if(g_iExtendedNum)
 	{
-		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]))
+		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == EXTEND_ROUNDS)
 		{
 			new win_limit = get_pcvar_num(g_pCvars[WINLIMIT]);
 			if(win_limit)
@@ -631,6 +644,23 @@ public DelayedChange()
 	new nextmap[MAP_NAME_LENGTH]; get_pcvar_string(g_pCvars[NEXTMAP], nextmap, charsmax(nextmap));
 	//set_pcvar_float(g_pCvars[CHATTIME], get_pcvar_float(g_pCvars[CHATTIME]) - 2.0);
 	server_cmd("changelevel %s", nextmap);
+}
+
+public Command_Nextmap(id)
+{
+	if(g_bVoteFinished)
+	{
+		new nextmap[32]; get_pcvar_string(g_pCvars[NEXTMAP], nextmap, charsmax(nextmap));
+		client_print_color(0, id, "%s^1 %L ^3%s^1.", PREFIX, LANG_PLAYER, "MAPM_NEXTMAP", nextmap);
+	}
+	else
+	{
+		client_print_color(0, id, "%s^1 %L ^3%L^1.", PREFIX, LANG_PLAYER, "MAPM_NEXTMAP", LANG_PLAYER, "MAPM_NOT_SELECTED");
+	}
+}
+public Command_CurrentMap(id)
+{
+	client_print_color(0, id, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_CURRENT_MAP", g_szCurMap);
 }
 #endif // FUNCTION_NEXTMAP
 
@@ -1000,6 +1030,58 @@ public Command_Debug(id, flag)
 
 	return PLUGIN_HANDLED;
 }
+
+public Command_Timeleft(id)
+{
+	new win_limit = get_pcvar_num(g_pCvars[WINLIMIT]);
+	new max_rounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
+	
+	if((win_limit || max_rounds) && get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == EXTEND_ROUNDS)
+	{
+		new text[128], len;
+		len = formatex(text, charsmax(text), "%L ", LANG_PLAYER, "MAPM_TIME_TO_END");
+		if(win_limit)
+		{
+			new left_wins = win_limit - max(g_iTeamScore[0], g_iTeamScore[1]);
+			// new szWins[16]; get_ending(iLeftWins, "MAPM_WIN1", "MAPM_WIN2", "MAPM_WIN3", szWins, charsmax(szWins));
+			// TODO: add to ML MAPM_WINS
+			len += formatex(text[len], charsmax(text) - len, "%d %L", left_wins, LANG_PLAYER, "MAPM_WINS");
+		}
+		if(win_limit && max_rounds)
+		{
+			len += formatex(text[len], charsmax(text) - len, " %L ", LANG_PLAYER, "MAPM_TIMELEFT_OR");
+		}
+		if(max_rounds)
+		{
+			new left_rounds = max_rounds - g_iTeamScore[0] - g_iTeamScore[1];
+			//new szRounds[16]; get_ending(iLeftRounds, "MAPM_ROUND1", "MAPM_ROUND2", "MAPM_ROUND3", szRounds, charsmax(szRounds));
+			// TODO: add to ML MAPM_ROUNDS
+			len += formatex(text[len], charsmax(text) - len, "%d %L", left_rounds, LANG_PLAYER, "MAPM_ROUNDS");
+		}
+		client_print_color(0, print_team_default, "%s^1 %s.", PREFIX, text);
+	}
+	else
+	{
+		if (get_pcvar_num(g_pCvars[TIMELIMIT]))
+		{
+			new a = get_timeleft();
+			client_print_color(0, id, "%s^1 %L:^3 %d:%02d", PREFIX, LANG_PLAYER, "MAPM_TIME_TO_END", (a / 60), (a % 60));
+		}
+		else
+		{
+			if(g_bVoteInNewRound)
+			{
+				// TODO: add ML
+				client_print_color(0, print_team_default, "%s^1 Wait vote in next round.", PREFIX);
+			}
+			else
+			{
+				client_print_color(0, print_team_default, "%s^1 %L", PREFIX, LANG_PLAYER, "MAPM_NO_TIMELIMIT");
+			}
+		}
+	}
+}
+
 public Command_StartVote(id, flag)
 {
 	if(~get_user_flags(id) & flag) return PLUGIN_HANDLED;
@@ -1195,7 +1277,7 @@ allow_map_extend()
 {
 	new allowed = 0;
 	new Float:timelimit = get_pcvar_float(g_pCvars[TIMELIMIT]);
-	new round_check = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
+	new round_check = get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == EXTEND_ROUNDS && (get_pcvar_num(g_pCvars[MAXROUNDS]) || get_pcvar_num(g_pCvars[WINLIMIT]));
 
 	#if defined FUNCTION_RTV
 	if(g_bIsRtvVote && get_pcvar_num(g_pCvars[ROCK_ALLOW_EXTEND])
@@ -1261,14 +1343,19 @@ StartVote()
 }
 public Task_VoteTimer()
 {
-	new dont_show_result = get_pcvar_num(g_pCvars[SHOW_RESULT_TYPE]) == SHOW_DISABLED;
 	if(--g_iTimer > 0)
 	{
-		for(new id = 1; id < 33; id++)
+		new dont_show_result = get_pcvar_num(g_pCvars[SHOW_RESULT_TYPE]) == SHOW_DISABLED;
+		new show_percent = get_pcvar_num(g_pCvars[SHOW_PERCENT_AFTER_VOTE]);
+		
+		new players[32], pnum; get_players(players, pnum, "ch");
+		for(new i, id; i < pnum; i++)
 		{
-			if(!is_user_connected(id) || dont_show_result && g_bPlayerVoted[id]) continue;
-
-			Show_VoteMenu(id);
+			id = players[i];
+			if(!dont_show_result || !g_bPlayerVoted[id])
+			{
+				Show_VoteMenu(id, show_percent);
+			}
 		}
 		set_task(1.0, "Task_VoteTimer", TASK_TIMER);
 	}
@@ -1278,12 +1365,12 @@ public Task_VoteTimer()
 		FinishVote();
 	}
 }
-public Show_VoteMenu(id)
+public Show_VoteMenu(id, show_percent)
 {
 	static menu[512];
 	new len, keys, percent, item;
 
-	new allow_percent = g_bPlayerVoted[id] && get_pcvar_num(g_pCvars[SHOW_PERCENT_AFTER_VOTE]) || !get_pcvar_num(g_pCvars[SHOW_PERCENT_AFTER_VOTE]);
+	new allow_percent = !show_percent || show_percent && g_bPlayerVoted[id];
 	
 	len = formatex(menu, charsmax(menu), "\y%L:^n^n", id, g_bPlayerVoted[id] ? "MAPM_MENU_VOTE_RESULTS" : "MAPM_MENU_CHOOSE_MAP");
 	
@@ -1298,6 +1385,7 @@ public Show_VoteMenu(id)
 		}
 		else
 		{
+			//TODO: add highlight for selected item
 			len += formatex(menu[len], charsmax(menu) - len, "\d%s", g_eVoteMenu[item][v_MapName]);
 		}
 
@@ -1386,7 +1474,10 @@ FinishVote()
 		g_bVoteFinished = false;
 		g_iExtendedNum++;
 
-		//TODO: add reset for rtv values
+		#if defined FUNCTION_RTV
+		arrayset(g_bRtvPlayerVoted, false, sizeof(g_bRtvPlayerVoted));
+		g_iRtvVotes = 0;
+		#endif // FUNCTION_RTV
 
 		if(g_fOldTimeLimit > 0.0)
 		{
@@ -1397,7 +1488,7 @@ FinishVote()
 		new win_limit = get_pcvar_num(g_pCvars[WINLIMIT]);
 		new max_rounds = get_pcvar_num(g_pCvars[MAXROUNDS]);
 
-		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == 1 && (win_limit || max_rounds))
+		if(get_pcvar_num(g_pCvars[EXTENDED_TYPE]) == EXTEND_ROUNDS && (win_limit || max_rounds))
 		{
 			new rounds = get_pcvar_num(g_pCvars[EXTENDED_ROUNDS]);
 			
